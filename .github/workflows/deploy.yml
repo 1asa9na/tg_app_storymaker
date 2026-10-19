@@ -1,23 +1,24 @@
 name: Deploy
 
-# main → стейджинг автоматически; прод — вручную: Actions → Deploy → Run workflow.
+# develop → стейджинг, master → прод (после подтверждения в environment production).
+# Повторная выкатка вручную: Actions → Deploy → Run workflow.
 on:
   push:
-    branches: [main]
+    branches: [develop, master]
   workflow_dispatch:
     inputs:
       environment:
         description: Окружение
         type: choice
-        options: [production, staging]
-        default: production
+        options: [staging, production]
+        default: staging
 
 permissions:
   contents: read
   packages: write
 
 concurrency:
-  group: deploy-${{ inputs.environment || 'staging' }}
+  group: deploy-${{ inputs.environment || (github.ref_name == 'master' && 'production' || 'staging') }}
   cancel-in-progress: false
 
 env:
@@ -57,9 +58,9 @@ jobs:
   deploy:
     needs: images
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment || 'staging' }}
+    environment: ${{ inputs.environment || (github.ref_name == 'master' && 'production' || 'staging') }}
     env:
-      ENV_NAME: ${{ inputs.environment || 'staging' }}
+      ENV_NAME: ${{ inputs.environment || (github.ref_name == 'master' && 'production' || 'staging') }}
       DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
       DEPLOY_USER: ${{ vars.DEPLOY_USER }}
       DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}

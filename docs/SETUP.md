@@ -72,14 +72,27 @@ ssh-keyscan -t ed25519 <ip-сервера>   # → DEPLOY_KNOWN_HOSTS
 2. *Settings → Environments*: создать `staging` и `production`. В каждом:
    - Variables: `DEPLOY_HOST` (IP или домен сервера), `DEPLOY_USER` (`deploy`);
    - Secrets: `DEPLOY_SSH_KEY` (содержимое `storymaker_deploy`), `DEPLOY_KNOWN_HOSTS` (вывод `ssh-keyscan`).
-3. Для `production` включить *Required reviewers* — прод выкатывается только после подтверждения.
+3. *Deployment branches and tags* в каждом окружении:
+   - `staging` — только `develop`;
+   - `production` — только `master`.
+
+   Тогда фича-ветка не сможет выкатиться ни в одно окружение даже вручную.
+4. Для `production` включить *Required reviewers*: прод выкатывается только после подтверждения.
+5. *Settings → General → Default branch* — `develop`: в неё по умолчанию открываются PR фич.
+6. *Settings → Rules → Rulesets* для `master` и `develop`:
+   - изменения только через PR;
+   - обязательные проверки `api` и `web` из workflow CI;
+   - запрет force push и удаления.
 
 Пока `DEPLOY_HOST` не задан, workflow собирает образы и пропускает деплой с предупреждением.
 
 ## 7. Первый деплой
 
-- **Стейджинг:** мердж в `main`. Workflow *Deploy* прогонит проверки, соберёт образы `ghcr.io/1asa9na/tg_app_storymaker/{api,web}:<sha>` и выкатит их скриптом `deploy.sh`: миграции, запуск, регистрация домена во внешнем Caddy.
-- **Прод:** *Actions → Deploy → Run workflow → production*.
+Ветки: `master` — прод, `develop` — стейджинг, фичи — от `develop` и обратно в неё через PR.
+
+- **Стейджинг:** мердж фичи в `develop`. Workflow *Deploy* прогонит проверки, соберёт образы `ghcr.io/1asa9na/tg_app_storymaker/{api,web}:<sha>` и выкатит их скриптом `deploy.sh`: миграции, запуск, регистрация домена во внешнем Caddy.
+- **Прод:** PR из `develop` в `master`. После мерджа тот же путь, но выкатка ждёт подтверждения в environment `production`.
+- **Повторная выкатка** без нового коммита: *Actions → Deploy → Run workflow*.
 
 ## 8. Проверка
 
