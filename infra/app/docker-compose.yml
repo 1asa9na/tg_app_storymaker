@@ -1,0 +1,72 @@
+# Одно окружение (staging или production). Запускает infra/scripts/deploy.sh:
+#   docker compose -p storymaker-<env> -f app/docker-compose.yml --env-file <env>.env ...
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: storymaker
+      POSTGRES_USER: storymaker
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U storymaker -d storymaker"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    image: ${IMAGE_REPO:?}/api:${IMAGE_TAG:?}
+    restart: unless-stopped
+    env_file:
+      - ${ENV_FILE:?}
+    environment:
+      DATABASE_URL: postgresql+asyncpg://storymaker:${POSTGRES_PASSWORD}@db:5432/storymaker
+      PUBLIC_URL: https://${APP_DOMAIN:?}
+    volumes:
+      - assets:/srv/assets
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz', timeout=3)
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+
+  web:
+    image: ${IMAGE_REPO}/web:${IMAGE_TAG}
+    restart: unless-stopped
+    environment:
+      APP_ENV: ${APP_ENV:?}
+      PLAYER_SENTRY_DSN: ${PLAYER_SENTRY_DSN:-}
+    volumes:
+      - assets:/srv/assets:ro
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    networks:
+      default: {}
+      edge:
+        # По этому имени edge-Caddy проксирует домен окружения
+        aliases:
+          - storymaker-${APP_ENV}-web
+
+volumes:
+  db-data: {}
+  assets: {}
+
+networks:
+  edge:
+    external: true

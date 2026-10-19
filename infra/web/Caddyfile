@@ -1,0 +1,37 @@
+# Внутренний Caddy окружения: статика плеера, ассеты историй, прокси в API.
+# TLS снаружи делает edge-Caddy (infra/edge).
+{
+	auto_https off
+	admin off
+	servers {
+		trusted_proxies static private_ranges
+	}
+}
+
+:80 {
+	encode zstd gzip
+
+	@backend path /api/* /bot/* /healthz
+	handle @backend {
+		reverse_proxy api:8000
+	}
+
+	# Локальная копия ассетов (см. docs/PLAN.md §2.5): имена с хешем, кэш навсегда
+	handle_path /assets/* {
+		root * /srv/assets
+		header Cache-Control "public, max-age=31536000, immutable"
+		file_server
+	}
+
+	handle {
+		root * /srv/player
+		@static path /static/*
+		header @static Cache-Control "public, max-age=31536000, immutable"
+		@page not path /static/*
+		header @page Cache-Control "no-cache"
+		# Подставляет APP_ENV и PLAYER_SENTRY_DSN в index.html
+		templates
+		try_files {path} /index.html
+		file_server
+	}
+}

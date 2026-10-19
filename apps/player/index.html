@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no"
+    />
+    <title>StoryMaker</title>
+    <script>
+      // В проде Caddy подставляет значения (директива templates); в dev остаются плейсхолдеры.
+      window.__APP_CONFIG__ = {
+        env: '{{env "APP_ENV"}}',
+        sentryDsn: '{{env "PLAYER_SENTRY_DSN"}}',
+      };
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
