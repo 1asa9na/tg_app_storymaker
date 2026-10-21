@@ -1,0 +1,4 @@
+apps/api
+pnpm-lock.yaml
+**/dist
+*.md

@@ -1,0 +1,16 @@
+# Локальная разработка: docker compose -f infra/dev/docker-compose.yml up -d
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: storymaker
+      POSTGRES_USER: storymaker
+      POSTGRES_PASSWORD: storymaker
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./init-test-db.sql:/docker-entrypoint-initdb.d/init-test-db.sql:ro
+      - db-data:/var/lib/postgresql/data
+
+volumes:
+  db-data: {}

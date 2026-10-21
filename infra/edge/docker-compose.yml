@@ -1,0 +1,23 @@
+# Внешний Caddy на портах 80/443: TLS (Let's Encrypt) и маршрутизация доменов по окружениям.
+services:
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./:/etc/caddy:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      - edge
+
+volumes:
+  caddy-data: {}
+  caddy-config: {}
+
+networks:
+  edge:
+    external: true
