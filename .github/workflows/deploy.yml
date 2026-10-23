@@ -59,22 +59,50 @@ jobs:
     needs: images
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment || (github.ref_name == 'master' && 'production' || 'staging') }}
+    # Всё берётся из секретов environment (Settings → Environments), список — docs/SETUP.md §6
     env:
       ENV_NAME: ${{ inputs.environment || (github.ref_name == 'master' && 'production' || 'staging') }}
-      DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
-      DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
       DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
       DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+      APP_DOMAIN: ${{ secrets.APP_DOMAIN }}
+      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+      BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+      BOT_WEBHOOK_SECRET: ${{ secrets.BOT_WEBHOOK_SECRET }}
+      SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+      PLAYER_SENTRY_DSN: ${{ secrets.PLAYER_SENTRY_DSN }}
+      S3_ENDPOINT_URL: ${{ secrets.S3_ENDPOINT_URL }}
+      S3_REGION: ${{ secrets.S3_REGION }}
+      S3_ACCESS_KEY_ID: ${{ secrets.S3_ACCESS_KEY_ID }}
+      S3_SECRET_ACCESS_KEY: ${{ secrets.S3_SECRET_ACCESS_KEY }}
       GHCR_USER: ${{ github.actor }}
       GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - uses: actions/checkout@v5
-      - name: Deploy over SSH
+      - name: Check secrets
+        id: check
         run: |
           if [ -z "$DEPLOY_HOST" ]; then
             echo "::warning::DEPLOY_HOST для окружения $ENV_NAME не задан — деплой пропущен (см. docs/SETUP.md)"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          missing=()
+          for name in DEPLOY_USER DEPLOY_SSH_KEY DEPLOY_KNOWN_HOSTS APP_DOMAIN \
+            POSTGRES_PASSWORD BOT_TOKEN BOT_WEBHOOK_SECRET; do
+            [ -n "${!name}" ] || missing+=("$name")
+          done
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::В environment $ENV_NAME не заданы секреты: ${missing[*]}"
+            exit 1
+          fi
+
+      - uses: actions/checkout@v5
+        if: steps.check.outputs.skip != 'true'
+
+      - name: Deploy over SSH
+        if: steps.check.outputs.skip != 'true'
+        run: |
           install -m 700 -d ~/.ssh
           printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
@@ -85,6 +113,17 @@ jobs:
           ssh "$target" "mkdir -p $root/app $root/edge"
           scp infra/app/docker-compose.yml "$target:$root/app/"
           scp infra/edge/docker-compose.yml infra/edge/Caddyfile "$target:$root/edge/"
-          scp infra/scripts/deploy.sh infra/env.example "$target:$root/"
+          scp infra/scripts/deploy.sh "$target:$root/"
+
+          # Файл окружения собирается из секретов и сразу пишется на сервер с правами 600
+          {
+            echo "APP_ENV=$ENV_NAME"
+            echo "IMAGE_REPO=$IMAGE_REPO"
+            for name in APP_DOMAIN POSTGRES_PASSWORD BOT_TOKEN BOT_WEBHOOK_SECRET SENTRY_DSN \
+              PLAYER_SENTRY_DSN S3_ENDPOINT_URL S3_REGION S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY; do
+              echo "$name=${!name}"
+            done
+          } | ssh "$target" "umask 077 && cat > $root/$ENV_NAME.env"
+
           printf '%s' "$GHCR_TOKEN" | ssh "$target" "docker login ghcr.io -u '$GHCR_USER' --password-stdin"
           ssh "$target" "$root/deploy.sh '$ENV_NAME' '$GITHUB_SHA'"
