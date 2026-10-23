@@ -619,7 +619,7 @@ POST /bot/webhook
 ### 10.6 Надёжность
 - Ночной `pg_dump` и `rclone sync` бакета `originals` в российский бакет `backups`. Восстановление проверяем руками до запуска.
 - Sentry без персональных данных, uptime-пинг, структурные логи.
-- Секреты — в GitHub Environments и `.env` на сервере.
+- Секреты — в GitHub Environments. Файл `.env` на сервере собирает из них workflow Deploy при каждой выкатке.
 
 ### 10.7 Где хоститься
 - VPS и S3 для бэкапов — у российского провайдера (Selectel, Timeweb Cloud, Yandex Cloud), канал от 100 Мбит/с, лучше 1 Гбит/с.

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Выкатывает окружение на сервере: ./deploy.sh <staging|production> <image-tag>
-# Рядом должны лежать app/docker-compose.yml, edge/ и <env>.env (шаблон — env.example).
+# Рядом должны лежать app/docker-compose.yml, edge/ и <env>.env.
+# Все файлы, включая <env>.env (из секретов environment), кладёт сюда workflow Deploy.
 set -euo pipefail
 
 usage="usage: deploy.sh <staging|production> <image-tag>"
@@ -15,7 +16,7 @@ fail() {
 }
 
 [[ $ENV_NAME == staging || $ENV_NAME == production ]] || fail "$usage"
-[[ -f $ENV_FILE ]] || fail "нет файла $ENV_FILE (шаблон: env.example)"
+[[ -f $ENV_FILE ]] || fail "нет файла $ENV_FILE (его создаёт workflow Deploy из секретов GitHub)"
 env_value() { sed -n "s/^$1=//p" "$ENV_FILE"; }
 [[ $(env_value APP_ENV) == "$ENV_NAME" ]] || fail "APP_ENV в $ENV_FILE должен быть $ENV_NAME"
 APP_DOMAIN=$(env_value APP_DOMAIN)
