@@ -2,10 +2,13 @@
 FROM node:22-slim AS build
 RUN corepack enable
 WORKDIR /repo
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
 COPY apps/player/package.json apps/player/
-RUN pnpm install --frozen-lockfile --filter player
+COPY packages/engine/package.json packages/engine/
+COPY packages/vn-renderer/package.json packages/vn-renderer/
+RUN pnpm install --frozen-lockfile --filter "player..."
 COPY apps/player apps/player
+COPY packages packages
 RUN pnpm --filter player build
 
 FROM caddy:2.10-alpine
