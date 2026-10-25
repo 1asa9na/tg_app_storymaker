@@ -1,0 +1,34 @@
+anna:
+  name: Анна
+  color: "#f19bb8"
+  emotions: [neutral, happy, smirk]
+  romance: true
+  levels:
+    - { at: 0, name: Незнакомка }
+    - { at: 10, name: Знакомая }
+    - { at: 25, name: Подруга }
+    - { at: 35, name: Близкая }
+  gifts:
+    rose: 6
+    chocolate: 3
+  schedule:
+    # Первая подходящая запись выигрывает
+    - { location: gym, slots: [evening], weekdays: [пн, ср, пт] }
+    - { location: cafe, slots: [day, evening], weekdays: [сб, вс] }
+    - { location: park, slots: [morning] }
+
+max:
+  name: Макс
+  color: "#8fc7ff"
+  emotions: [neutral, happy]
+  romance: true
+  levels:
+    - { at: 0, name: Незнакомец }
+    - { at: 10, name: Приятель }
+    - { at: 25, name: Друг }
+  gifts:
+    chocolate: 6
+    rose: -1
+  schedule:
+    - { location: cafe, slots: [day, evening], weekdays: [пн, вт, ср, чт, пт] }
+    - { location: park, slots: [day] }

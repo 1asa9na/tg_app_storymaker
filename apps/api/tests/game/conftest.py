@@ -104,13 +104,13 @@ TITLE: dict[str, Any] = {
     },
     "events": {
         "meet_anna": {
-            "trigger": {"on": "enter", "location": "gym"},
+            "trigger": {"enter": "gym"},
             "when": {"time.slot": "evening"},
             "scene": "anna_meet",
             "effects": {"set": {"flag.met_anna": True}},
         },
         "first_workout": {
-            "trigger": {"on": "activity", "activity": "workout"},
+            "trigger": {"activity": "workout"},
             "scene": "first_workout",
             "priority": 1,
         },

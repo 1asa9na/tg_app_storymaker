@@ -60,6 +60,8 @@ MESSAGES = {
     "greater_than_equal": "значение слишком маленькое",
     "less_than_equal": "значение слишком большое",
     "too_short": "список не должен быть пустым",
+    "model_type": "ожидается словарь (ключ: значение)",
+    "model_attributes_type": "ожидается словарь (ключ: значение)",
 }
 
 Compiler = Callable[[dict[str, str], dict[str, Any]], dict[str, Any]]

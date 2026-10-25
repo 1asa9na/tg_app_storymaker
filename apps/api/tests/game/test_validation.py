@@ -35,7 +35,7 @@ def test_reports_broken_references() -> None:
                 "effects": {"add": {"stat.speed": 1}, "start_quest": "unknown"},
             }
         },
-        events={"x": {"trigger": {"on": "activity", "activity": "fly"}, "scene": "missing"}},
+        events={"x": {"trigger": {"activity": "fly"}, "scene": "missing"}},
     )
 
     assert errors == [

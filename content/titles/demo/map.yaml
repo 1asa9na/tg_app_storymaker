@@ -1,0 +1,6 @@
+image: city_map
+points:
+  home: { x: 0.2, y: 0.8 }
+  gym: { x: 0.7, y: 0.65 }
+  cafe: { x: 0.45, y: 0.4 }
+  park: { x: 0.25, y: 0.25 }

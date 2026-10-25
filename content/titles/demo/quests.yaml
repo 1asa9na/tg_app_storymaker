@@ -1,0 +1,20 @@
+anna_trust:
+  name: Доверие Анны
+  start_when:
+    flag.met_anna: true
+  stages:
+    - id: friends
+      journal: Чаще болтать с Анной в спортзале
+      complete_when:
+        affection.anna: { gte: 12 }
+    - id: coffee
+      journal: Позвать Анну на кофе в выходные
+      complete_when:
+        flag.anna_coffee_done: true
+    - id: close
+      journal: Стать для Анны близким человеком
+      complete_when:
+        affection.anna: { gte: 35 }
+  rewards:
+    add: { global.xp: 50 }
+    achievement: anna_close

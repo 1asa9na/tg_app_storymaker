@@ -237,6 +237,9 @@ class Engine:
         if state.location != activity.location:
             return "Нужно быть в этой локации"
         slot = self.slots[state.slot]
+        location = self.title.locations[activity.location]
+        if location.slots and slot not in location.slots:
+            return f"Открыто: {self._slot_names(location.slots)}"
         if activity.slots and slot not in activity.slots:
             return f"Доступно: {self._slot_names(activity.slots)}"
         if (

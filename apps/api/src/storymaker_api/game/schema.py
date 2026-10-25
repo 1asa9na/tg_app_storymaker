@@ -219,6 +219,19 @@ class Quest(Model):
     rewards: Effects = Effects()
 
 
+def _trigger(value: Any) -> Any:
+    """Короткая запись: day_start | {activity: <занятие>} | {enter: <локация>}."""
+    if value == "day_start":
+        return {"on": "day_start"}
+    if isinstance(value, dict) and len(value) == 1:
+        ((key, target),) = value.items()
+        if key == "activity":
+            return {"on": "activity", "activity": target}
+        if key == "enter":
+            return {"on": "enter", "location": target}
+    return value
+
+
 class Trigger(Model):
     on: Literal["activity", "enter", "day_start"]
     activity: Id | None = None
@@ -233,8 +246,12 @@ class Trigger(Model):
         return self
 
 
+TriggerField = Annotated[Trigger, BeforeValidator(_trigger)]
+
+
 class Event(Model):
-    trigger: Trigger
+    #: day_start, {activity: <занятие>} или {enter: <локация>}.
+    trigger: TriggerField
     when: Condition | None = None
     scene: Id | None = None
     effects: Effects = Effects()

@@ -209,3 +209,15 @@ def test_consumables_apply_their_effects(engine: Engine) -> None:
 
     assert outcome.state.resources["energy"].value == 35
     assert outcome.state.items["tea"] == 0
+
+
+def test_activities_lock_when_their_location_closes(engine: Engine) -> None:
+    state = engine.new_game(NOW)
+    state = engine.apply(state, Go(type="go", location="gym"), NOW).state
+    state = engine.apply(state, DoActivity(type="activity", id="workout"), NOW).state
+    state = engine.apply(
+        state, SceneComplete(type="scene_complete", scene="first_workout", effects=[]), NOW
+    ).state
+
+    assert state.location == "gym"
+    assert engine.activity_lock(state, "workout") == "Открыто: утро, вечер"

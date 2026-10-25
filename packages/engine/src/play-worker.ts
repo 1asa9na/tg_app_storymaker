@@ -31,8 +31,7 @@ function random(seed: number): () => number {
 }
 
 function pick(choices: SceneChoice[], strategy: Strategy, next: () => number): SceneChoice {
-  const pool =
-    strategy === "free" ? choices.filter((choice) => choice.premium === null) : choices;
+  const pool = strategy === "free" ? choices.filter((choice) => choice.premium === null) : choices;
   const options = pool.length > 0 ? pool : choices;
   if (strategy === "first") {
     return options[0]!;

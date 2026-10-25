@@ -1,0 +1,39 @@
+intro:
+  trigger: day_start
+  when: { time.day: 1 }
+  scene: intro
+
+anna_meet:
+  trigger: { enter: gym }
+  when: { time.slot: evening }
+  scene: anna_meet
+  effects:
+    set: { flag.met_anna: true }
+
+anna_coffee:
+  trigger: { activity: coffee_anna }
+  scene: coffee_date
+  effects:
+    set: { flag.anna_coffee_done: true }
+    achievement: first_date
+
+max_meet:
+  trigger: { enter: park }
+  when: { time.slot: day }
+  scene: max_meet
+  effects:
+    set: { flag.met_max: true }
+
+free_drink:
+  trigger: { activity: workout }
+  when:
+    stat.fitness: { gte: 9 }
+  priority: -1
+  effects:
+    add: { item.energy_drink: 1 }
+
+week_done:
+  trigger: day_start
+  when: { time.day: 7 }
+  effects:
+    achievement: first_week

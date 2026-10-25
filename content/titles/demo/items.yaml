@@ -1,0 +1,16 @@
+rose:
+  name: Роза
+  description: Красная, с длинным стеблем.
+  icon: item_rose
+  kind: gift
+chocolate:
+  name: Шоколадка
+  icon: item_chocolate
+  kind: gift
+energy_drink:
+  name: Энергетик
+  description: Возвращает 30 энергии.
+  icon: item_energy_drink
+  kind: consumable
+  use:
+    add: { resource.energy: 30 }
