@@ -642,8 +642,10 @@ POST /bot/webhook
 - [x] FastAPI + aiogram-вебхук, проверка `initData`, `/healthz`, таблица `users`
 - [x] Плеер-заглушка с приветствием после проверки на сервере
 - [x] Caddy, Docker Compose, `deploy.sh`; автодеплой `develop` → стейджинг, `master` → прод
-- [ ] VPS, домен, боты, Supabase, бакет бэкапов *(вручную)*
-- [ ] `python -m storymaker_api.doctor` на сервере *(скрипт готов)*
+- [x] VPS, домен `bgylke8.online`, стейджинг-бот; секреты деплоя в GitHub
+- [x] Стейджинг выкатывается из `develop`: `https://staging.bgylke8.online`, Mini App открывается в Telegram
+- [ ] Supabase и бакет бэкапов — к этапу 3, тогда же `doctor` проверит хранилище
+- [ ] Прод-окружение и прод-бот — перед бетой
 
 ### Этап 1. Сцены — 2 недели
 - [ ] Спайк ink: теги на выборах, `EXTERNAL`-функции со снимком состояния, компиляция в браузере и в Node
