@@ -651,7 +651,8 @@ POST /bot/webhook
 - [x] Caddy, Docker Compose, `deploy.sh`; автодеплой `develop` → стейджинг, `master` → прод
 - [x] VPS, домен `bgylke8.online`, стейджинг-бот; секреты деплоя в GitHub
 - [x] Стейджинг выкатывается из `develop`: `https://staging.bgylke8.online`, Mini App открывается в Telegram
-- [ ] Supabase и бакет бэкапов — к этапу 3, тогда же `doctor` проверит хранилище
+- [x] Supabase Storage для стейджинга: бакеты `assets` и `originals`, ключи S3 в секретах
+- [ ] Бакет бэкапов — к этапу 3
 - [ ] Прод-окружение и прод-бот — перед бетой
 
 ### Этап 1. Сцены — 2 недели
