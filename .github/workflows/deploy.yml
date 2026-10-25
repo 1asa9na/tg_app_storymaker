@@ -64,6 +64,7 @@ jobs:
       ENV_NAME: ${{ inputs.environment || (github.ref_name == 'master' && 'production' || 'staging') }}
       DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
       DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
       DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
       DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
       APP_DOMAIN: ${{ secrets.APP_DOMAIN }}
@@ -107,6 +108,8 @@ jobs:
           printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          # Порт SSH для ssh и scp; без секрета DEPLOY_PORT — 22
+          printf 'Host %s\n  Port %s\n' "$DEPLOY_HOST" "${DEPLOY_PORT:-22}" > ~/.ssh/config
 
           target="$DEPLOY_USER@$DEPLOY_HOST"
           root=/opt/storymaker

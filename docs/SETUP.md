@@ -50,8 +50,9 @@ Workflow *Deploy* при каждой выкатке:
 |---|---|---|---|
 | `DEPLOY_HOST` | да | IP или домен сервера | Панель провайдера VPS |
 | `DEPLOY_USER` | да | Пользователь для деплоя | `deploy` (шаг 2) |
+| `DEPLOY_PORT` | нет | Порт SSH, если не 22 | Настройки сервера |
 | `DEPLOY_SSH_KEY` | да | Приватный SSH-ключ целиком, вместе со строками `BEGIN`/`END` | Файл `storymaker_deploy`, см. ниже |
-| `DEPLOY_KNOWN_HOSTS` | да | Отпечаток сервера | `ssh-keyscan -t ed25519 <ip-сервера>` |
+| `DEPLOY_KNOWN_HOSTS` | да | Отпечаток сервера | На своей машине: `ssh-keyscan -p <порт> -t ed25519 <ip-сервера>` (флаги до адреса); строку вывода целиком |
 | `APP_DOMAIN` | да | Домен окружения без `https://` | `staging.<домен>` или `app.<домен>` |
 | `POSTGRES_PASSWORD` | да | Пароль базы | `openssl rand -hex 24` |
 | `BOT_TOKEN` | да | Токен бота этого окружения | @BotFather (шаг 1) |
