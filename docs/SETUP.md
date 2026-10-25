@@ -36,55 +36,70 @@ A-записи на IP сервера:
 
 Сертификаты Let's Encrypt Caddy получит сам при первом деплое. Записи должны начать резолвиться до этого.
 
-## 4. Файлы окружений на сервере
+## 4. Секреты в GitHub
 
-От пользователя `deploy`:
+Всё, что нужно серверу, хранится в GitHub. Создайте *Settings → Environments* → `staging` и `production`, затем в *Environment secrets* каждого окружения заведите секреты из таблицы.
+
+Workflow *Deploy* при каждой выкатке:
+- собирает из этих секретов файл `/opt/storymaker/<окружение>.env`;
+- пишет его на сервер с правами 600.
+
+Руками на сервере ничего не правится. `APP_ENV` и `IMAGE_REPO` workflow подставляет сам.
+
+| Секрет | Обязателен | Что это | Где взять |
+|---|---|---|---|
+| `DEPLOY_HOST` | да | IP или домен сервера | Панель провайдера VPS |
+| `DEPLOY_USER` | да | Пользователь для деплоя | `deploy` (шаг 2) |
+| `DEPLOY_PORT` | нет | Порт SSH, если не 22 | Настройки сервера |
+| `DEPLOY_SSH_KEY` | да | Приватный SSH-ключ целиком, вместе со строками `BEGIN`/`END` | Файл `storymaker_deploy`, см. ниже |
+| `DEPLOY_KNOWN_HOSTS` | да | Отпечаток сервера | На своей машине: `ssh-keyscan -p <порт> -t ed25519 <ip-сервера>` (флаги до адреса); строку вывода целиком |
+| `APP_DOMAIN` | да | Домен окружения без `https://` | `staging.<домен>` или `app.<домен>` |
+| `POSTGRES_PASSWORD` | да | Пароль базы | `openssl rand -hex 24` |
+| `BOT_TOKEN` | да | Токен бота этого окружения | @BotFather (шаг 1) |
+| `BOT_WEBHOOK_SECRET` | да | Секрет вебхука | `openssl rand -hex 32` |
+| `S3_ENDPOINT_URL` | для `doctor` и с этапа 3 | Адрес S3 API Supabase | Supabase: *Storage → Settings → S3 Connection* (шаг 5) |
+| `S3_REGION` | — " — | Регион проекта | Там же |
+| `S3_ACCESS_KEY_ID` | — " — | ID ключа | Там же, создать ключ |
+| `S3_SECRET_ACCESS_KEY` | — " — | Секрет ключа | Там же, показывается один раз |
+| `SENTRY_DSN` | нет | Ошибки API | Sentry или GlitchTip |
+| `PLAYER_SENTRY_DSN` | нет | Ошибки плеера | Там же, отдельный проект |
+
+Ключ для деплоя (на своём компьютере):
 
 ```bash
-cd /opt/storymaker
-# env.example появится после первого деплоя; можно взять из infra/env.example
-cp env.example staging.env && chmod 600 staging.env
-openssl rand -hex 24   # → POSTGRES_PASSWORD
-openssl rand -hex 32   # → BOT_WEBHOOK_SECRET
+ssh-keygen -t ed25519 -N "" -f storymaker_deploy
+# storymaker_deploy.pub — на сервер, в ~deploy/.ssh/authorized_keys
+# storymaker_deploy — целиком в секрет DEPLOY_SSH_KEY
 ```
 
-Заполнить `staging.env`: `APP_ENV=staging`, `APP_DOMAIN`, пароль базы, токен стейджинг-бота, секрет вебхука, S3-ключи (шаг 5). Для прода — `production.env` с `APP_ENV=production` и своими значениями: ни пароли, ни токены, ни ключи между окружениями не переиспользуются.
+Правила:
+- **Значения у окружений разные:** два бота, два пароля, два проекта Supabase. Одинаковыми могут быть только `DEPLOY_*`, если окружения живут на одном сервере.
+- **Значения — одной строкой, без кавычек.** Исключение — `DEPLOY_SSH_KEY`: он многострочный, но в файл окружения не попадает.
+- **`POSTGRES_PASSWORD` задаётся один раз.** Postgres берёт его только при первом создании базы. Если потом поменять секрет, пароль в базе не изменится, а API перестанет к ней подключаться.
+- **Как ведёт себя деплой без секретов:** пока не задан `DEPLOY_HOST`, деплой пропускается с предупреждением. Если хост задан, а обязательного секрета нет, деплой падает и перечисляет недостающие.
 
 ## 5. Supabase (только Storage)
 
-По проекту на окружение: стейджинг и прод, оба на бесплатном тарифе (см. `docs/PLAN.md` §9.1). Регион — Франкфурт.
+По проекту на окружение: стейджинг и прод, оба на бесплатном тарифе (см. `docs/PLAN.md` §10.1). Регион — Франкфурт.
 
-1. *Storage → Settings → S3 Connection*: включить S3-протокол, создать access key. Endpoint, регион и пару ключей — в `S3_*` файла окружения.
+1. *Storage → Settings → S3 Connection*: включить S3-протокол, создать access key. Endpoint, регион и пару ключей — в секреты `S3_*` окружения (шаг 4).
 2. Бакеты `assets` и `originals`, оба **приватные**. Для `assets` — лимит размера файла и разрешённые типы `image/webp`, `audio/mp4`, `audio/mpeg`.
 3. На `storage.objects` не создавать ни одной политики.
 4. Выключить: *Project Settings → Data API*; в *Authentication* — все способы входа, регистрацию и анонимный вход; в *Storage → Settings* — Image Transformations.
 
-## 6. GitHub Actions
+## 6. Настройки репозитория
 
-1. Ключ для деплоя (на своём компьютере):
-
-```bash
-ssh-keygen -t ed25519 -N "" -f storymaker_deploy
-# публичную часть — на сервер, в ~deploy/.ssh/authorized_keys
-ssh-keyscan -t ed25519 <ip-сервера>   # → DEPLOY_KNOWN_HOSTS
-```
-
-2. *Settings → Environments*: создать `staging` и `production`. В каждом:
-   - Variables: `DEPLOY_HOST` (IP или домен сервера), `DEPLOY_USER` (`deploy`);
-   - Secrets: `DEPLOY_SSH_KEY` (содержимое `storymaker_deploy`), `DEPLOY_KNOWN_HOSTS` (вывод `ssh-keyscan`).
-3. *Deployment branches and tags* в каждом окружении:
+1. *Deployment branches and tags* в каждом окружении:
    - `staging` — только `develop`;
    - `production` — только `master`.
 
    Тогда фича-ветка не сможет выкатиться ни в одно окружение даже вручную.
-4. Для `production` включить *Required reviewers*: прод выкатывается только после подтверждения.
-5. *Settings → General → Default branch* — `develop`: в неё по умолчанию открываются PR фич.
-6. *Settings → Rules → Rulesets* для `master` и `develop`:
+2. Для `production` включить *Required reviewers*: прод выкатывается только после подтверждения.
+3. *Settings → General → Default branch* — `develop`: в неё по умолчанию открываются PR фич.
+4. *Settings → Rules → Rulesets* для `master` и `develop`:
    - изменения только через PR;
    - обязательные проверки `api` и `web` из workflow CI;
    - запрет force push и удаления.
-
-Пока `DEPLOY_HOST` не задан, workflow собирает образы и пропускает деплой с предупреждением.
 
 ## 7. Первый деплой
 
@@ -99,12 +114,10 @@ ssh-keyscan -t ed25519 <ip-сервера>   # → DEPLOY_KNOWN_HOSTS
 На сервере:
 
 ```bash
-cd /opt/storymaker
-docker compose -p storymaker-staging -f app/docker-compose.yml --env-file staging.env \
-  run --rm api python -m storymaker_api.doctor
+docker exec storymaker-staging-api-1 python -m storymaker_api.doctor
 ```
 
-Скрипт проверяет базу, Telegram Bot API (бот и вебхук) и Supabase Storage: запись, presigned-загрузку и сохранение `Cache-Control`. Это и есть спайк из `docs/PLAN.md` §9.4.
+Скрипт запускается внутри работающего контейнера API с его настройками. Он проверяет базу, Telegram Bot API (бот и вебхук) и Supabase Storage: запись, presigned-загрузку и сохранение `Cache-Control`. Это спайк из `docs/PLAN.md` §10.4. Для прода — `storymaker-production-api-1`.
 
 Затем в Telegram: открыть стейджинг-бота → `/start` → «Открыть». Должно появиться «Привет, <имя>!».
 
