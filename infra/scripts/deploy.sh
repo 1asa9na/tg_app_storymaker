@@ -16,6 +16,8 @@ fail() {
 }
 
 [[ $ENV_NAME == staging || $ENV_NAME == production ]] || fail "$usage"
+docker compose version >/dev/null 2>&1 ||
+  fail "нет плагина docker compose: sudo apt install docker-compose-v2 (или docker-compose-plugin)"
 [[ -f $ENV_FILE ]] || fail "нет файла $ENV_FILE (его создаёт workflow Deploy из секретов GitHub)"
 env_value() { sed -n "s/^$1=//p" "$ENV_FILE"; }
 [[ $(env_value APP_ENV) == "$ENV_NAME" ]] || fail "APP_ENV в $ENV_FILE должен быть $ENV_NAME"
