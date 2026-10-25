@@ -11,6 +11,7 @@ dependencies = [
     "fastapi>=0.147.0",
     "httpx>=0.28.1",
     "pydantic-settings>=2.16.0",
+    "pyyaml>=6.0.3",
     "sentry-sdk[fastapi]>=2.72.0",
     "sqlalchemy[asyncio]>=2.1.5",
     "uvicorn[standard]>=0.54.0",
@@ -26,6 +27,7 @@ dev = [
     "pyright>=1.1.414",
     "pytest>=9.1.1",
     "ruff>=0.17.1",
+    "types-pyyaml>=6.0.12.20260906",
 ]
 
 [tool.ruff]

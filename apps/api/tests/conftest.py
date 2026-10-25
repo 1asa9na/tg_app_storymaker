@@ -28,13 +28,13 @@ BOT_TOKEN = os.environ["BOT_TOKEN"]
 WEBHOOK_SECRET = os.environ["BOT_WEBHOOK_SECRET"]
 
 
-@pytest.fixture(scope="session", autouse=True)
+@pytest.fixture(scope="session")
 def migrated_database() -> None:
     command.upgrade(Config(str(Path(__file__).parents[1] / "alembic.ini")), "head")
 
 
 @pytest.fixture
-def client() -> Iterator[TestClient]:
+def client(migrated_database: None) -> Iterator[TestClient]:
     with TestClient(create_app()) as test_client:
         yield test_client
 
