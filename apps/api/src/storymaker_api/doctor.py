@@ -23,6 +23,13 @@ from storymaker_api.db import create_engine
 # Валидный WebP 1×1: бакет assets принимает только разрешённые типы файлов.
 TINY_WEBP = base64.b64decode("UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA==")
 IMMUTABLE = "public, max-age=31536000, immutable"
+# Supabase не принимает контрольные суммы, которые boto3 ≥ 1.36 добавляет к каждой загрузке.
+S3_CONFIG = Config(
+    signature_version="s3v4",
+    s3={"addressing_style": "path"},
+    request_checksum_calculation="when_required",
+    response_checksum_validation="when_required",
+)
 
 
 class Skipped(Exception):
@@ -63,7 +70,7 @@ def check_storage_sync(settings: Settings) -> str:
         region_name=settings.s3_region,
         aws_access_key_id=settings.s3_access_key_id,
         aws_secret_access_key=secret.get_secret_value(),
-        config=Config(signature_version="s3v4", s3={"addressing_style": "path"}),
+        config=S3_CONFIG,
     )
     try:
         return _exercise_storage(s3, settings)
