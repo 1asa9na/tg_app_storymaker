@@ -22,9 +22,11 @@ class Settings(BaseSettings):
 
     sentry_dsn: str | None = None
 
-    # Собранные тайтлы (<slug>.json): в образе — /app/titles, локально — после
-    # `python -m storymaker_api.game build ../../content/titles --out build/titles`.
-    titles_dir: Path | None = None
+    # Тайтлы из репозитория (content/titles): при деплое импортируются в базу те, которых там
+    # ещё нет (python -m storymaker_api.studio seed). В образе — /app/content/titles.
+    content_dir: Path | None = None
+    # Адрес студии (https://studio.<домен>): бот присылает туда ссылки входа.
+    studio_url: str | None = None
 
     # Supabase Storage через S3 API
     s3_endpoint_url: str | None = None

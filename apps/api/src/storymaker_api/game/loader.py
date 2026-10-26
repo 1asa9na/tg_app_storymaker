@@ -87,24 +87,76 @@ def _message(error: Any) -> str:
     return text or str(error["msg"])
 
 
-def load_title(directory: Path, compiler: Compiler = compile_scenes) -> LoadResult:
-    result = LoadResult(title=None)
-    if not (directory / "title.yaml").exists():
-        result.errors.append(f"{directory}: нет title.yaml")
-        return result
+#: Тайтл в виде файлов: путь внутри папки тайтла → текст («title.yaml», «scenes/intro.ink»).
+Files = dict[str, str]
 
-    raw: dict[str, Any] = {"id": directory.name}
-    for section, file in SECTIONS.items():
+
+def read_directory(directory: Path) -> Files:
+    """Файлы тайтла из папки: YAML разделов и сцены."""
+    files: Files = {}
+    for file in SECTIONS.values():
         path = directory / file
-        if not path.exists():
-            continue
-        try:
-            raw[section] = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-        except yaml.YAMLError as error:
-            result.errors.append(f"{file}: ошибка YAML: {error}")
-    if result.errors:
-        return result
+        if path.exists():
+            files[file] = path.read_text(encoding="utf-8")
+    for path in sorted((directory / "scenes").glob("*.ink")):
+        files[f"scenes/{path.name}"] = path.read_text(encoding="utf-8")
+    return files
 
+
+@dataclass
+class Parsed:
+    """Разобранные файлы: разделы как словари и исходники сцен."""
+
+    sections: dict[str, Any] = field(default_factory=dict)
+    scenes: dict[str, str] = field(default_factory=dict)
+    errors: list[str] = field(default_factory=list)
+
+
+def parse_files(files: Files) -> Parsed:
+    parsed = Parsed()
+    by_file = {file: section for section, file in SECTIONS.items()}
+    for name, text in files.items():
+        if name in by_file:
+            try:
+                data = yaml.safe_load(text) or {}
+            except yaml.YAMLError as error:
+                parsed.errors.append(f"{name}: ошибка YAML: {error}")
+                continue
+            if not isinstance(data, dict):
+                parsed.errors.append(f"{name}: ожидается словарь (ключ: значение)")
+                continue
+            parsed.sections[by_file[name]] = data
+        elif name.startswith("scenes/") and name.endswith(".ink"):
+            key = name.removeprefix("scenes/").removesuffix(".ink")
+            if KEY.match(key):
+                parsed.scenes[key] = text
+            else:
+                parsed.errors.append(f"{name}: имя файла — ключ латиницей: a-z, 0-9, _")
+        else:
+            parsed.errors.append(f"{name}: неизвестный файл")
+    if "config" not in parsed.sections and not parsed.errors:
+        parsed.errors.append("нет title.yaml")
+    return parsed
+
+
+def load_title(directory: Path, compiler: Compiler = compile_scenes) -> LoadResult:
+    if not (directory / "title.yaml").exists():
+        return LoadResult(title=None, errors=[f"{directory}: нет title.yaml"])
+    parsed = parse_files(read_directory(directory))
+    if parsed.errors:
+        return LoadResult(title=None, errors=parsed.errors)
+    return assemble(directory.name, parsed.sections, parsed.scenes, compiler)
+
+
+def assemble(
+    slug: str,
+    sections: dict[str, Any],
+    sources: dict[str, str],
+    compiler: Compiler = compile_scenes,
+) -> LoadResult:
+    """Тайтл из разделов и исходников сцен: схемы, компиляция сцен, проверка ссылок."""
+    result = LoadResult(title=None)
+    raw: dict[str, Any] = {"id": slug, **sections}
     try:
         title = Title.model_validate(raw)
     except ValidationError as error:
@@ -112,12 +164,6 @@ def load_title(directory: Path, compiler: Compiler = compile_scenes) -> LoadResu
             result.errors.append(f"{_where(problem['loc'])}: {_message(problem)}")
         return result
 
-    sources: dict[str, str] = {}
-    for path in sorted((directory / "scenes").glob("*.ink")):
-        if KEY.match(path.stem):
-            sources[path.stem] = path.read_text(encoding="utf-8")
-        else:
-            result.errors.append(f"scenes/{path.name}: имя файла — ключ латиницей: a-z, 0-9, _")
     if sources:
         registry = {
             "characters": {key: list(char.emotions) for key, char in title.characters.items()},

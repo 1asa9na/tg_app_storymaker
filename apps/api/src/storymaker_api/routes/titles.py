@@ -16,6 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from storymaker_api.catalog import Catalog
 from storymaker_api.db import get_session
 from storymaker_api.game.engine import Action, ActionError, Outcome
 from storymaker_api.game.registry import TitleBuild
@@ -33,29 +34,11 @@ def get_now() -> datetime:
     return datetime.now(UTC)
 
 
-def _builds(request: Request) -> dict[str, TitleBuild]:
-    return request.app.state.titles
+def get_catalog(request: Request) -> Catalog:
+    return request.app.state.catalog
 
 
-async def _title_id(request: Request, session: AsyncSession, build: TitleBuild) -> int:
-    """id тайтла в базе; строка заводится при первом обращении после публикации."""
-    cache: dict[str, int] = request.app.state.title_ids
-    slug = build.title.id
-    if slug not in cache:
-        order = list(_builds(request)).index(slug)
-        title_id = await session.scalar(
-            insert(TitleRow)
-            .values(slug=slug, name=build.title.config.name, sort=order)
-            .on_conflict_do_update(
-                index_elements=[TitleRow.slug],
-                set_={"name": build.title.config.name, "sort": order},
-            )
-            .returning(TitleRow.id)
-        )
-        assert title_id is not None
-        await session.commit()
-        cache[slug] = title_id
-    return cache[slug]
+CatalogDep = Annotated[Catalog, Depends(get_catalog)]
 
 
 class Game:
@@ -67,12 +50,13 @@ class Game:
 
 
 async def get_game(
-    slug: str, request: Request, session: Annotated[AsyncSession, Depends(get_session)]
+    slug: str, catalog: CatalogDep, session: Annotated[AsyncSession, Depends(get_session)]
 ) -> Game:
-    build = _builds(request).get(slug)
-    if build is None:
+    found = await catalog.get(session, slug)
+    if found is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "title not found")
-    return Game(build, await _title_id(request, session, build))
+    row, build = found
+    return Game(build, row.id)
 
 
 UserDep = Annotated[User, Depends(current_user)]
@@ -168,7 +152,7 @@ def _outcome(outcome: Outcome, unlocked: list[str]) -> dict[str, Any]:
 
 
 @router.get("/titles")
-async def catalog(request: Request, user: UserDep, session: SessionDep) -> list[dict[str, Any]]:
+async def catalog(titles: CatalogDep, user: UserDep, session: SessionDep) -> list[dict[str, Any]]:
     """Опубликованные тайтлы и прогресс игрока в них."""
     rows = await session.execute(
         select(TitleRow.slug, Save.state)
@@ -177,7 +161,8 @@ async def catalog(request: Request, user: UserDep, session: SessionDep) -> list[
     )
     saves = {slug: state for slug, state in rows}
     result = []
-    for slug, build in _builds(request).items():
+    for row, build in await titles.published(session):
+        slug = row.slug
         state = saves.get(slug)
         result.append(
             {
@@ -378,14 +363,15 @@ class ProfileAchievement(BaseModel):
 
 
 @router.get("/profile")
-async def profile(request: Request, user: UserDep, session: SessionDep) -> dict[str, Any]:
+async def profile(titles: CatalogDep, user: UserDep, session: SessionDep) -> dict[str, Any]:
     """Глобальный прогресс: уровень, опыт и достижения во всех тайтлах."""
     account = await get_account(session, user.id)
     slugs = dict((await session.execute(select(TitleRow.id, TitleRow.slug))).all())
     achievements = []
     for row in await list_achievements(session, user.id):
         slug = slugs.get(row.title_id) if row.title_id else None
-        build = _builds(request).get(slug) if slug else None
+        found = await titles.get(session, slug) if slug else None
+        build = found[1] if found else None
         definition = build.title.achievements.get(row.achievement_key) if build else None
         achievements.append(
             ProfileAchievement(

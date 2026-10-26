@@ -24,6 +24,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://storymaker:${POSTGRES_PASSWORD}@db:5432/storymaker
       PUBLIC_URL: https://${APP_DOMAIN:?}
+      STUDIO_URL: ${STUDIO_DOMAIN:+https://${STUDIO_DOMAIN}}
     volumes:
       - assets:/srv/assets
     depends_on:
@@ -46,6 +47,7 @@ services:
     environment:
       APP_ENV: ${APP_ENV:?}
       PLAYER_SENTRY_DSN: ${PLAYER_SENTRY_DSN:-}
+      STUDIO_DOMAIN: ${STUDIO_DOMAIN:-studio.invalid}
     volumes:
       - assets:/srv/assets:ro
     depends_on:

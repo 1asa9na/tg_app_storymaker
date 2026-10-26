@@ -45,6 +45,91 @@ class TitleRow(Base):
     slug: Mapped[str] = mapped_column(Text, unique=True)
     name: Mapped[str] = mapped_column(Text)
     sort: Mapped[int] = mapped_column(Integer, server_default="0")
+    #: draft — виден только в студии; published — в каталоге; hidden — снят, сохранения живы.
+    status: Mapped[str] = mapped_column(Text, server_default="draft")
+    #: Сборка, которую играют игроки.
+    active_build_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("builds.id", use_alter=True, name="titles_active_build_id_fkey")
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class TitleDocument(Base):
+    """Сущность тайтла: персонаж, локация, занятие… Раздел config и карта — ключ main."""
+
+    __tablename__ = "title_documents"
+    __table_args__ = (UniqueConstraint("title_id", "kind", "key"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    title_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("titles.id"))
+    #: Раздел тайтла: config, characters, map, locations, activities, items, quests, events,
+    #: achievements.
+    kind: Mapped[str] = mapped_column(Text)
+    key: Mapped[str] = mapped_column(Text)
+    data: Mapped[Any] = mapped_column(JSONB)
+    updated_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id"))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class SceneSource(Base):
+    __tablename__ = "scenes"
+    __table_args__ = (UniqueConstraint("title_id", "key"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    title_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("titles.id"))
+    key: Mapped[str] = mapped_column(Text)
+    source: Mapped[str] = mapped_column(Text)
+    updated_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id"))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Build(Base):
+    """Собранный тайтл: проверенные данные и скомпилированные сцены. Не меняется после сборки."""
+
+    __tablename__ = "builds"
+    __table_args__ = (UniqueConstraint("title_id", "version"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    title_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("titles.id"))
+    version: Mapped[int] = mapped_column(Integer)
+    #: Хеш данных: по нему сохранение замечает, что тайтл обновился.
+    hash: Mapped[str] = mapped_column(Text)
+    #: Title целиком (dump_title), сцены уже скомпилированы.
+    data: Mapped[str] = mapped_column(Text)
+    warnings: Mapped[list[str]] = mapped_column(JSONB, server_default="[]")
+    notes: Mapped[str] = mapped_column(Text, server_default="")
+    created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Staff(Base):
+    """Команда: кто может войти в студию и что там делать."""
+
+    __tablename__ = "staff"
+
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), primary_key=True)
+    #: admin — всё; designer — данные, сборка, публикация; writer — сцены.
+    role: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class LoginToken(Base):
+    """Одноразовая ссылка входа в студию из бота. Хранится только хеш."""
+
+    __tablename__ = "login_tokens"
+
+    token_hash: Mapped[str] = mapped_column(Text, primary_key=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class StudioSession(Base):
+    __tablename__ = "studio_sessions"
+
+    token_hash: Mapped[str] = mapped_column(Text, primary_key=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
