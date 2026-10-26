@@ -295,7 +295,10 @@ class Engine:
                         {
                             "id": key,
                             "name": activity.name,
+                            "description": activity.description,
                             "cost": activity.cost.model_dump(),
+                            # Что даёт занятие — для подсказки на кнопке («+3 к форме»).
+                            "effects": activity.effects.add,
                             "with_character": activity.with_character,
                             "lock": self.activity_lock(state, key),
                         }

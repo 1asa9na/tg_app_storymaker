@@ -226,6 +226,7 @@ async def game_data(game: GameDep) -> dict[str, Any]:
             }
             for key, character in title.characters.items()
         },
+        "gifts_per_day": config.gifts.per_character_per_day,
         "map": title.map.model_dump(),
         "locations": {
             key: {"name": location.name, "background": location.background}

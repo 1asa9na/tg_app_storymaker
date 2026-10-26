@@ -9,6 +9,7 @@ WORKDIR /repo
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
 COPY apps/player/package.json apps/player/
 COPY packages/vn-renderer/package.json packages/vn-renderer/
+COPY packages/game-ui/package.json packages/game-ui/
 COPY packages/engine packages/engine
 RUN pnpm install --frozen-lockfile --filter @storymaker/engine
 WORKDIR /repo/apps/api
