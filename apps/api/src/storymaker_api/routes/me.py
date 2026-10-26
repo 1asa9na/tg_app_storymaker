@@ -2,26 +2,25 @@ from typing import Annotated
 
 from aiogram.utils.web_app import WebAppUser
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, ConfigDict
-from sqlalchemy import func
-from sqlalchemy.dialects.postgresql import insert
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from storymaker_api.auth import tg_user
 from storymaker_api.db import get_session
-from storymaker_api.models import User
+from storymaker_api.progress import get_account
+from storymaker_api.users import upsert_user
 
 router = APIRouter(prefix="/api")
 
 
 class MeResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
     id: int
     tg_id: int
     first_name: str
     username: str | None
     language_code: str | None
+    level: int
+    xp: int
 
 
 @router.get("/me")
@@ -30,20 +29,15 @@ async def me(
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> MeResponse:
     """Текущий пользователь. При первом запросе создаётся, дальше обновляется профиль."""
-    profile = {
-        "username": tg.username,
-        "first_name": tg.first_name,
-        "last_name": tg.last_name,
-        "language_code": tg.language_code,
-    }
-    stmt = (
-        insert(User)
-        .values(tg_id=tg.id, **profile)
-        .on_conflict_do_update(
-            index_elements=[User.tg_id], set_={**profile, "last_seen_at": func.now()}
-        )
-        .returning(User)
-    )
-    user = (await session.scalars(stmt)).one()
+    user = await upsert_user(session, tg)
     await session.commit()
-    return MeResponse.model_validate(user)
+    account = await get_account(session, user.id)
+    return MeResponse(
+        id=user.id,
+        tg_id=user.tg_id,
+        first_name=user.first_name,
+        username=user.username,
+        language_code=user.language_code,
+        level=account.level,
+        xp=account.xp,
+    )

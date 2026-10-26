@@ -2,6 +2,7 @@ import hashlib
 import hmac
 import json
 import os
+import tempfile
 import time
 from collections.abc import Iterator
 from pathlib import Path
@@ -22,7 +23,15 @@ from alembic import command
 from alembic.config import Config
 from fastapi.testclient import TestClient
 
+from storymaker_api.game.registry import dump_title
+from storymaker_api.game.schema import Title
 from storymaker_api.main import create_app
+from tests.game.conftest import TITLE
+
+# Тайтлы для API — тестовый тайтл движка, собранный в JSON, как при сборке образа.
+TITLES_DIR = Path(tempfile.mkdtemp(prefix="storymaker-titles-"))
+(TITLES_DIR / "test.json").write_text(dump_title(Title.model_validate(TITLE)), encoding="utf-8")
+os.environ["TITLES_DIR"] = str(TITLES_DIR)
 
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 WEBHOOK_SECRET = os.environ["BOT_WEBHOOK_SECRET"]
