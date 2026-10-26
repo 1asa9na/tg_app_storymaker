@@ -1,4 +1,5 @@
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -20,6 +21,10 @@ class Settings(BaseSettings):
     init_data_ttl_seconds: int = 24 * 60 * 60
 
     sentry_dsn: str | None = None
+
+    # Собранные тайтлы (<slug>.json): в образе — /app/titles, локально — после
+    # `python -m storymaker_api.game build ../../content/titles --out build/titles`.
+    titles_dir: Path | None = None
 
     # Supabase Storage через S3 API
     s3_endpoint_url: str | None = None
