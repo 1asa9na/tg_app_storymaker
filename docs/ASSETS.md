@@ -263,7 +263,7 @@ text, letters, captions, watermark, signature, logo, brand names, frame, border,
 | `max_sad.png`, `max_surprised.png`, `max_embarrassed.png`, `max_smirk.png` | Спрайты | 1000×2400 | Новые сцены с Максом | P1 |
 | `avatar_anna.png`, `avatar_max.png` | Аватары | 512×512 | Карта, отношения | P1 |
 | `ach_first_date.png`, `ach_anna_close.png`, `ach_first_week.png` | Достижения | 512×512 | Профиль | P1 |
-| `ui_*.svg` (≈ 20 шт., §5.8) | Иконки интерфейса | 24×24, SVG | Панель, меню, карта | P1 |
+| `ui_*.svg` (≈ 22 шт., §5.8) | Иконки интерфейса | 24×24, SVG | Панель, меню, карта | P1 |
 | Аватар бота | Брендинг | 640×640 | Профиль бота в Telegram | P1 |
 | Картинка описания бота | Брендинг | 640×360 | Пустой чат с ботом | P1 |
 | `anna_angry.png`, `max_angry.png` | Спрайты | 1000×2400 | Конфликтные сцены | P2 |
