@@ -6,6 +6,7 @@
 
 - [План разработки MVP](docs/PLAN.md)
 - [Настройка окружений и локальная разработка](docs/SETUP.md)
+- [Гайд сценариста](docs/WRITER_GUIDE.md) · [формат сцен](docs/SCENE_FORMAT.md) · [формат тайтла](docs/TITLE_FORMAT.md)
 - [Ассеты: технические требования](docs/ASSETS.md)
 
 Ветки: `master` — прод, `develop` — стейджинг, фичи — от `develop` и обратно через PR.
