@@ -1,0 +1,383 @@
+/* Экран игры. Отступы под системные панели Telegram — переменные --gu-safe-* задаёт плеер. */
+.gu-game {
+  --gu-bg: #15121c;
+  --gu-panel: #211a2e;
+  --gu-panel-2: #2b2140;
+  --gu-accent: #6d4bb8;
+  --gu-text: #f2eef8;
+  --gu-muted: #a49cb4;
+  --gu-up: #7fd49a;
+  --gu-down: #f0a0a0;
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--gu-bg);
+  color: var(--gu-text);
+  padding-top: var(--gu-safe-top, env(safe-area-inset-top));
+  padding-bottom: var(--gu-safe-bottom, env(safe-area-inset-bottom));
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.gu-busy .gu-body {
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+.gu-fill {
+  box-sizing: border-box;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+  text-align: center;
+}
+
+.gu-muted,
+.gu-empty {
+  color: var(--gu-muted, #a49cb4);
+}
+
+.gu-empty {
+  padding: 32px 16px;
+  text-align: center;
+}
+
+.gu-topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--gu-panel);
+}
+
+.gu-time {
+  display: flex;
+  flex-direction: column;
+  font-size: 15px;
+}
+
+.gu-time span,
+.gu-resource-name,
+.gu-resource small {
+  color: var(--gu-muted);
+  font-size: 12px;
+}
+
+.gu-resources {
+  display: flex;
+  gap: 14px;
+  text-align: right;
+}
+
+.gu-resource {
+  display: flex;
+  flex-direction: column;
+  font-variant-numeric: tabular-nums;
+}
+
+.gu-body {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.gu-tabs {
+  display: flex;
+  background: var(--gu-panel);
+}
+
+.gu-tab {
+  flex: 1;
+  padding: 12px 4px;
+  border-radius: 0;
+  background: none;
+  color: var(--gu-muted);
+  font-size: 13px;
+}
+
+.gu-tab-active {
+  color: var(--gu-text);
+  box-shadow: inset 0 2px 0 var(--gu-accent);
+}
+
+/* Карта */
+.gu-map {
+  position: relative;
+  min-height: 100%;
+  aspect-ratio: 9 / 16;
+  background-size: cover;
+  background-position: center;
+}
+
+.gu-pin {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  padding: 8px 12px;
+  font-size: 14px;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.4);
+}
+
+.gu-here {
+  outline: 3px solid #f2eef8;
+}
+
+.gu-pin small {
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+.gu-cards {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.gu-card {
+  min-height: 96px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 12px 14px;
+  background-size: cover;
+  background-position: center 30%;
+  text-align: left;
+  text-shadow: 0 1px 4px rgb(0 0 0 / 0.8);
+}
+
+.gu-card span {
+  font-size: 13px;
+}
+
+.gu-card small,
+.gu-activity small {
+  color: var(--gu-down);
+  font-size: 12px;
+}
+
+.gu-locked {
+  filter: grayscale(0.7);
+  opacity: 0.6;
+}
+
+/* Локация */
+.gu-place-bg {
+  position: relative;
+  height: 42vh;
+  background-size: cover;
+  background-position: center;
+  display: flex;
+  align-items: flex-end;
+}
+
+.gu-place-bg h2 {
+  position: absolute;
+  top: 12px;
+  left: 14px;
+  margin: 0;
+  font-size: 20px;
+  text-shadow: 0 1px 6px rgb(0 0 0 / 0.8);
+}
+
+.gu-sprites {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  height: 92%;
+}
+
+.gu-sprites img {
+  height: 100%;
+  max-width: 50%;
+  object-fit: contain;
+  object-position: bottom;
+}
+
+.gu-activities {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+}
+
+.gu-activity,
+.gu-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  background: var(--gu-panel-2);
+  text-align: left;
+}
+
+.gu-activity span,
+.gu-row span {
+  color: var(--gu-muted);
+  font-size: 13px;
+}
+
+.gu-sleep {
+  background: #26304a;
+}
+
+/* Списки */
+.gu-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 12px;
+  list-style: none;
+}
+
+.gu-row small {
+  color: var(--gu-up);
+  font-size: 12px;
+}
+
+.gu-row:disabled {
+  opacity: 1;
+  cursor: default;
+}
+
+.gu-person,
+.gu-stat,
+.gu-quest {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--gu-panel);
+}
+
+.gu-person span {
+  color: var(--gu-muted);
+  font-size: 14px;
+}
+
+.gu-stat meter {
+  flex: 1;
+}
+
+.gu-journal,
+.gu-people {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+}
+
+.gu-people .gu-rows {
+  padding: 0;
+}
+
+.gu-quest {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.gu-quest span {
+  color: var(--gu-muted);
+  font-size: 14px;
+}
+
+.gu-done {
+  opacity: 0.6;
+}
+
+.gu-journal h3,
+.gu-people h3 {
+  margin: 12px 0 0;
+  color: var(--gu-muted);
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+/* Лист, тосты */
+.gu-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: flex-end;
+  background: rgb(0 0 0 / 0.5);
+}
+
+.gu-sheet {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  padding: 20px 16px calc(20px + var(--gu-safe-bottom, env(safe-area-inset-bottom)));
+  border-radius: 18px 18px 0 0;
+  background: var(--gu-panel);
+  color: var(--gu-text, #f2eef8);
+}
+
+.gu-sheet h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.gu-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  line-height: 1.6;
+}
+
+.gu-up {
+  color: var(--gu-up, #7fd49a);
+}
+
+.gu-down {
+  color: var(--gu-down, #f0a0a0);
+}
+
+.gu-toasts {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  top: calc(64px + var(--gu-safe-top, env(safe-area-inset-top)));
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.gu-toast {
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgb(33 26 46 / 0.95);
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.4);
+  font-size: 14px;
+  line-height: 1.5;
+  pointer-events: auto;
+  animation: gu-in 0.2s ease-out;
+}
+
+.gu-toast-error {
+  background: rgb(90 32 44 / 0.95);
+}
+
+@keyframes gu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}

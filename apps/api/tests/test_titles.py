@@ -41,6 +41,14 @@ def test_state_starts_a_new_game(api: TestClient) -> None:
     assert body["here"]["location"] == "home"
     assert body["resources"]["energy"]["value"] == 50
     assert body["account"]["level"] == 1
+    ok(api, {"type": "go", "location": "gym"})
+    workout = next(
+        a
+        for a in api.get("/api/titles/test/state").json()["here"]["activities"]
+        if a["id"] == "workout"
+    )
+    assert workout["effects"] == {"stat.fitness": 3, "global.xp": 5}
+    assert workout["cost"] == {"slots": 1, "energy": 20}
 
 
 def test_catalog_lists_titles_with_save(api: TestClient) -> None:
@@ -56,6 +64,7 @@ def test_game_data_has_no_rules(api: TestClient) -> None:
 
     assert body["characters"]["anna"]["name"] == "Анна"
     assert body["locations"]["cafe"] == {"name": "Кафе", "background": "cafe"}
+    assert body["gifts_per_day"] == 1
     assert "events" not in body and "scenes" not in body
 
 
