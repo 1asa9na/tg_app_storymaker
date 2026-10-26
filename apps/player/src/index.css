@@ -70,3 +70,95 @@ button.secondary {
   list-style: none;
   line-height: 1.6;
 }
+
+/* Отступы под вырез и кнопки Telegram в полноэкранном режиме (переменные задаёт SDK). */
+:root {
+  --gu-safe-top: calc(
+    var(--tg-viewport-safe-area-inset-top, env(safe-area-inset-top, 0px)) +
+      var(--tg-viewport-content-safe-area-inset-top, 0px)
+  );
+  --gu-safe-bottom: calc(
+    var(--tg-viewport-safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)) +
+      var(--tg-viewport-content-safe-area-inset-bottom, 0px)
+  );
+}
+
+.page {
+  box-sizing: border-box;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: calc(16px + var(--gu-safe-top)) 16px calc(16px + var(--gu-safe-bottom));
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.page h2 {
+  margin: 8px 0 0;
+  font-size: 18px;
+}
+
+.chip {
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: #2b2140;
+  font-size: 14px;
+}
+
+.titles,
+.achievements {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.title-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  min-height: 120px;
+  padding: 18px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #3b2a63, #1f1830);
+  text-align: left;
+}
+
+.title-card strong {
+  font-size: 20px;
+}
+
+.title-action {
+  margin-top: auto;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: #6d4bb8;
+  font-size: 14px;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px;
+  border-radius: 14px;
+  background: #211a2e;
+}
+
+.panel meter {
+  width: 100%;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
