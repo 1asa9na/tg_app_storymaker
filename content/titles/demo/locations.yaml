@@ -1,0 +1,15 @@
+home:
+  name: Дом
+  background: home
+gym:
+  name: Спортзал
+  background: gym
+  slots: [morning, evening]
+cafe:
+  name: Кафе «Зерно»
+  background: cafe
+  slots: [day, evening]
+park:
+  name: Парк
+  background: park
+  slots: [morning, day, evening]

@@ -1,0 +1,75 @@
+rest:
+  # Просто пропустить время. Энергию не даёт: она восстанавливается в реальном времени.
+  name: Отдохнуть
+  location: home
+  cost: { slots: 1 }
+
+read:
+  name: Почитать
+  location: home
+  cost: { slots: 1, energy: 10 }
+  effects:
+    add: { stat.charm: 1 }
+
+workout:
+  name: Тренировка
+  location: gym
+  cost: { slots: 1, energy: 25 }
+  effects:
+    add: { stat.fitness: 3, global.xp: 5 }
+
+talk_anna:
+  name: Поболтать с Анной
+  location: gym
+  with_character: anna
+  cost: { slots: 1, energy: 10 }
+  effects:
+    add: { affection.anna: 4, global.xp: 2 }
+
+shift:
+  name: Подработка бариста
+  location: cafe
+  slots: [day]
+  cost: { slots: 1, energy: 30 }
+  effects:
+    add: { resource.money: 40, global.xp: 3 }
+
+buy_rose:
+  name: Купить розу
+  location: cafe
+  cost: { slots: 0, money: 20 }
+  effects:
+    add: { item.rose: 1 }
+
+buy_chocolate:
+  name: Купить шоколадку
+  location: cafe
+  cost: { slots: 0, money: 10 }
+  effects:
+    add: { item.chocolate: 1 }
+
+coffee_anna:
+  name: Позвать Анну на кофе
+  location: cafe
+  with_character: anna
+  cost: { slots: 1, energy: 10, money: 15 }
+  requires:
+    affection.anna: { gte: 12 }
+  locked_hint: Анна пока слишком мало вас знает
+  effects:
+    add: { affection.anna: 6 }
+
+walk:
+  name: Прогулка
+  location: park
+  cost: { slots: 1, energy: 10 }
+  effects:
+    add: { stat.charm: 1, stat.fitness: 1 }
+
+chat_max:
+  name: Поговорить с Максом
+  location: park
+  with_character: max
+  cost: { slots: 1, energy: 10 }
+  effects:
+    add: { affection.max: 3, global.xp: 2 }

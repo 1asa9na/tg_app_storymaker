@@ -9,6 +9,8 @@
 В @BotFather:
 1. `/newbot` — создать два бота: `<name>_staging_bot` и `<name>_bot`. Сохранить токены.
 2. Для каждого бота: *Bot Settings → Configure Mini App → Enable Mini App*, URL — `https://staging.<домен>` для стейджинга и `https://app.<домен>` для прода.
+
+   Этот адрес хранится у Telegram, и наш сервер его не меняет. Вебхук, кнопку меню и кнопку после `/start` сервер перерегистрирует при каждом деплое, а URL Mini App — нет. Поэтому **после смены `APP_DOMAIN` обновите URL и здесь**, иначе бот будет открывать старый домен, а браузер покажет `ERR_SSL_PROTOCOL_ERROR`. Короткая ссылка из `/newapp` меняется отдельно: `/myapps` → приложение → *Edit Web App URL*.
 3. По желанию: `/newapp` — короткое имя для прямой ссылки `t.me/<bot>/<app>` (понадобится для диплинков `startapp`).
 
 Кнопку меню «Читать» и команду `/start` API настраивает сам при каждом запуске.
@@ -57,7 +59,7 @@ Workflow *Deploy* при каждой выкатке:
 | `POSTGRES_PASSWORD` | да | Пароль базы | `openssl rand -hex 24` |
 | `BOT_TOKEN` | да | Токен бота этого окружения | @BotFather (шаг 1) |
 | `BOT_WEBHOOK_SECRET` | да | Секрет вебхука | `openssl rand -hex 32` |
-| `S3_ENDPOINT_URL` | для `doctor` и с этапа 3 | Адрес S3 API Supabase | Supabase: *Storage → Settings → S3 Connection* (шаг 5) |
+| `S3_ENDPOINT_URL` | для `doctor` и с этапа 3 | Адрес S3 API Supabase вида `https://<ref>.storage.supabase.co/storage/v1/s3` — не Project URL | Supabase: *Storage → Settings → S3 Connection*, поле Endpoint (шаг 5) |
 | `S3_REGION` | — " — | Регион проекта | Там же |
 | `S3_ACCESS_KEY_ID` | — " — | ID ключа | Там же, создать ключ |
 | `S3_SECRET_ACCESS_KEY` | — " — | Секрет ключа | Там же, показывается один раз |
@@ -82,7 +84,7 @@ ssh-keygen -t ed25519 -N "" -f storymaker_deploy
 
 По проекту на окружение: стейджинг и прод, оба на бесплатном тарифе (см. `docs/PLAN.md` §10.1). Регион — Франкфурт.
 
-1. *Storage → Settings → S3 Connection*: включить S3-протокол, создать access key. Endpoint, регион и пару ключей — в секреты `S3_*` окружения (шаг 4).
+1. *Storage → Settings → S3 Connection*: включить S3-протокол, создать access key. Endpoint, регион и пару ключей — в секреты `S3_*` окружения (шаг 4). Project URL и ключи `anon` и `service_role` для S3 не подходят и не нужны.
 2. Бакеты `assets` и `originals`, оба **приватные**. Для `assets` — лимит размера файла и разрешённые типы `image/webp`, `audio/mp4`, `audio/mpeg`.
 3. На `storage.objects` не создавать ни одной политики.
 4. Выключить: *Project Settings → Data API*; в *Authentication* — все способы входа, регистрацию и анонимный вход; в *Storage → Settings* — Image Transformations.

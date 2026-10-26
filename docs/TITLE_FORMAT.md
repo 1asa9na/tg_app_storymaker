@@ -1,0 +1,293 @@
+# Формат тайтла
+
+Тайтл — это папка с YAML-файлами и сценами. Пока нет студии, геймдизайнер ведёт тайтл прямо в этих файлах, проверяет их командой `check` и гоняет баланс симулятором. Потом эти же файлы импортируются в студию.
+
+Рабочий пример — [`content/titles/demo`](../content/titles/demo): неделя в новом городе, два героя для романа, четыре локации, квест и четыре сцены.
+
+```
+content/titles/<ключ-тайтла>/
+  title.yaml         настройки: время, ресурсы, характеристики, старт, подарки
+  characters.yaml    персонажи, их расписание и отношение к подаркам
+  map.yaml           карта и точки локаций
+  locations.yaml     локации
+  activities.yaml    занятия
+  items.yaml         предметы
+  quests.yaml        квесты
+  events.yaml        события: когда и какая сцена запускается
+  achievements.yaml  достижения
+  scenes/*.ink       сцены (формат — docs/SCENE_FORMAT.md)
+```
+
+Обязателен только `title.yaml`, остальные файлы — по мере надобности.
+
+## Как проверять
+
+Из папки `apps/api`:
+
+```bash
+uv run python -m storymaker_api.game check ../../content/titles/demo
+uv run python -m storymaker_api.game simulate ../../content/titles/demo --players 200
+uv run python -m storymaker_api.game simulate ../../content/titles/demo --strategy romance:anna
+```
+
+`check` находит:
+- **ошибки:** неизвестные ключи, опечатки в путях условий, неправильные типы значений, ссылки на несуществующие локации, предметы, квесты, сцены, ошибки в сценах с номером строки;
+- **предупреждения:** сцену, которую не запускает ни одно событие, локацию без занятий.
+
+`simulate` прогоняет виртуальных игроков и печатает отчёт (подробнее — ниже).
+
+## Общие правила
+
+- **Ключи** — латиница в нижнем регистре, цифры и `_`: `anna`, `gym`, `energy_drink`. Ключ — это «имя» сущности для ссылок; то, что видит игрок, пишется в `name`.
+- **Ключи не переименовываются после публикации.** На них ссылаются сохранения игроков. Устаревшее лучше оставить и перестать использовать.
+- **YAML понимает `yes`, `no`, `on`, `off` как true и false.** Если нужно именно слово, возьмите его в кавычки: `"no"`.
+- Комментарии начинаются с `#`.
+
+## title.yaml
+
+```yaml
+name: Неделя в новом городе
+
+time:
+  slots:                       # части дня по порядку
+    - { id: morning, name: Утро }
+    - { id: day, name: День }
+    - { id: evening, name: Вечер }
+    - { id: night, name: Ночь }
+  sleep_from: [evening, night] # когда можно лечь спать; без поля — всегда
+  days: 7                      # длина тайтла; после последнего дня игра заканчивается
+  week: [пн, вт, ср, чт, пт, сб, вс]  # дни недели для расписаний, по кругу
+
+resources:
+  energy:
+    name: Энергия
+    start: 100
+    max: 100
+    regen: { amount: 1, every_minutes: 6 }  # +1 каждые 6 минут реального времени
+  money:
+    name: Деньги
+    start: 50
+
+stats:
+  charm: { name: Обаяние, start: 0, min: 0, max: 100 }
+
+start:
+  location: home        # где игрок начинает и просыпается
+  items: { rose: 1 }
+  flags: [tutorial]
+
+gifts:
+  per_character_per_day: 1  # сколько подарков в день можно сделать одному персонажу
+  default_affection: 1      # симпатия за подарок, если у персонажа нет особого отношения
+
+affection: { min: -100, max: 100 }
+```
+
+**Время.** Занятие сдвигает время на `cost.slots` частей дня. Когда части дня кончаются, наступает следующее утро, а игрок оказывается в `start.location`. Лечь спать можно из слотов `sleep_from`: тоже наступает утро.
+
+**Энергия** восстанавливается в реальном времени, даже когда игрок не в игре. Ещё ресурс можно пополнять при смене игрового дня: `on_new_day: 30` или `on_new_day: max`.
+
+## characters.yaml
+
+```yaml
+anna:
+  name: Анна
+  color: "#f19bb8"          # цвет плашки имени в диалогах
+  emotions: [neutral, happy, smirk]
+  romance: true
+  affection_start: 0
+  levels:                   # названия уровней отношений по порогам симпатии
+    - { at: 0, name: Незнакомка }
+    - { at: 10, name: Знакомая }
+    - { at: 25, name: Подруга }
+  gifts:                    # отношение к подаркам: предмет → изменение симпатии
+    rose: 6
+    chocolate: 3
+  schedule:                 # первая подходящая запись выигрывает
+    - { location: gym, slots: [evening], weekdays: [пн, ср, пт] }
+    - { location: cafe, slots: [day, evening], weekdays: [сб, вс] }
+    - { location: park, slots: [morning], when: { flag.met_anna: true } }
+```
+
+Если ни одна запись расписания не подошла, персонажа сейчас нигде нет.
+
+## map.yaml и locations.yaml
+
+```yaml
+# map.yaml
+image: city_map          # ключ картинки карты; без неё карта — список карточек
+points:
+  gym: { x: 0.7, y: 0.65 } # доли ширины и высоты картинки, от 0 до 1
+```
+
+```yaml
+# locations.yaml
+cafe:
+  name: Кафе «Зерно»
+  background: cafe        # ключ фона
+  slots: [day, evening]   # когда открыто; без поля — всегда
+  visible_when: { flag.heard_about_cafe: true }  # когда появляется на карте
+  unlock_when: { affection.anna: { gte: 10 } }   # когда в неё можно войти
+  locked_hint: Анна ещё не позвала вас сюда      # что показать, пока закрыто
+```
+
+## activities.yaml
+
+```yaml
+coffee_anna:
+  name: Позвать Анну на кофе
+  location: cafe
+  with_character: anna        # доступно, только когда Анна здесь
+  slots: [evening]            # когда доступно; без поля — когда открыта локация
+  cost: { slots: 1, energy: 10, money: 15 }
+  requires: { affection.anna: { gte: 12 } }
+  locked_hint: Анна пока слишком мало вас знает
+  effects:
+    add: { affection.anna: 6, global.xp: 3 }
+```
+
+`cost.slots: 0` — занятие не сдвигает время, например покупка.
+
+## items.yaml
+
+```yaml
+rose:
+  name: Роза
+  icon: item_rose
+  kind: gift          # gift — можно дарить, consumable — использовать, key — сюжетный
+energy_drink:
+  name: Энергетик
+  kind: consumable
+  use:
+    add: { resource.energy: 30 }
+```
+
+## quests.yaml
+
+```yaml
+anna_trust:
+  name: Доверие Анны
+  start_when: { flag.met_anna: true }  # без поля квест стартует только эффектом start_quest
+  stages:
+    - id: friends
+      journal: Чаще болтать с Анной в спортзале
+      complete_when: { affection.anna: { gte: 12 } }
+    - id: coffee
+      journal: Позвать Анну на кофе
+      complete_when: { flag.anna_coffee_done: true }
+      effects: { add: { global.xp: 10 } }   # награда за этап
+  rewards:                                  # награда за весь квест
+    add: { global.xp: 50 }
+    achievement: anna_close
+```
+
+Этап закрывается сам, как только выполнено его условие. Эффект `advance_quest` (из сцены или события) закрывает текущий этап принудительно.
+
+## events.yaml
+
+Событие — это то, что случается в момент действия игрока: запускает сцену и/или даёт эффекты.
+
+```yaml
+anna_meet:
+  trigger: { enter: gym }          # при входе в локацию
+  when: { time.slot: evening }
+  scene: anna_meet
+  effects: { set: { flag.met_anna: true } }
+
+anna_coffee:
+  trigger: { activity: coffee_anna }   # после занятия
+  scene: coffee_date
+  priority: 10                         # из нескольких подходящих срабатывает с наибольшим
+
+intro:
+  trigger: day_start                   # в начале игрового дня
+  when: { time.day: 1 }
+  scene: intro
+  once: true                           # по умолчанию true: событие срабатывает один раз
+```
+
+На одно действие срабатывает одно событие каждого вида, с наибольшим `priority`. Сцены выстраиваются в очередь, пока игрок их не досмотрит, других действий нет.
+
+## achievements.yaml
+
+```yaml
+first_date:
+  name: Первое свидание
+  description: Сходить на кофе с Анной.
+```
+
+Достижения и опыт (`global.xp`) идут в общий профиль игрока на платформе.
+
+## Условия
+
+Условие — словарь «путь → значение». Выполняется, когда верно всё сразу.
+
+```yaml
+when:
+  affection.anna: { gte: 10 }        # операторы: eq, ne, gt, gte, lt, lte, in
+  flag.met_anna: true
+  time.slot: evening                 # без оператора — «равно»
+  time.weekday: { in: [сб, вс] }
+  any:                               # хотя бы одно из списка
+    - { item.rose: { gte: 1 } }
+    - { resource.money: { gte: 20 } }
+  not: { quest.anna_trust: done }
+```
+
+| Путь | Значение |
+|---|---|
+| `stat.<характеристика>` | Число |
+| `resource.<ресурс>` | Число |
+| `affection.<персонаж>` | Число |
+| `item.<предмет>` | Сколько штук в инвентаре |
+| `flag.<флаг>` | true или false; флаги заводятся первым использованием |
+| `event.<событие>` | Срабатывало ли событие |
+| `quest.<квест>` | `inactive`, `active` или `done` |
+| `quest.<квест>.stage` | Ключ текущего этапа |
+| `time.day` | Номер игрового дня, с 1 |
+| `time.slot` | Часть дня |
+| `time.weekday` | День недели из `time.week` |
+| `location` | Где сейчас игрок |
+| `global.level` | Уровень аккаунта на платформе |
+
+## Эффекты
+
+```yaml
+effects:
+  add:                       # прибавить, можно отрицательное
+    stat.charm: 2
+    resource.money: -15
+    affection.anna: 3
+    item.rose: 1
+    global.xp: 5             # опыт аккаунта на платформе
+  set:
+    flag.met_anna: true
+  start_quest: anna_trust    # один ключ или список
+  advance_quest: [anna_trust]
+  achievement: first_date
+```
+
+Значения обрезаются по границам: характеристика не выйдет за `min`/`max`, ресурс не уйдёт ниже нуля и выше `max`.
+
+## Симулятор баланса
+
+```bash
+uv run python -m storymaker_api.game simulate <папка> [параметры]
+```
+
+| Параметр | По умолчанию | Что задаёт |
+|---|---|---|
+| `--players` | 100 | Сколько виртуальных игроков |
+| `--strategy` | `random` | `random` — случайные занятия; `romance:<персонаж>` — игрок, который добивается одного героя |
+| `--scene-strategy` | `free` | Выборы в сценах: `free` — без платных, `random`, `first` |
+| `--session-gap` | 4 | Через сколько часов игрок возвращается, когда кончилась энергия |
+| `--hours` | 336 | Сколько реальных часов длится симуляция |
+| `--seed` | 1 | Тот же seed — тот же результат |
+
+В отчёте:
+- **Дни:** сколько игроков дошло, за сколько реальных часов, сколько раз упирались в энергию;
+- **Сцены:** какая доля игроков увидела каждую. 0% — сцена недостижима;
+- **Квесты:** доля завершивших и медианный день;
+- **Персонажи, характеристики, опыт и достижения** к концу.
+
+Если в отчёте есть строка «Застряли без доступных действий», у игрока бывает ситуация, когда делать нечего, а лечь спать нельзя. Это ошибка в данных.

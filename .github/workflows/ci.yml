@@ -31,6 +31,14 @@ jobs:
       DATABASE_URL: postgresql+asyncpg://storymaker:storymaker@localhost:5432/storymaker_test
     steps:
       - uses: actions/checkout@v5
+      # Node и движок сцен нужны тестам, которые компилируют и проигрывают сцены демо-тайтла
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --filter @storymaker/engine
+        working-directory: .
       - uses: astral-sh/setup-uv@v6
         with:
           version: "0.11.32"

@@ -8,10 +8,12 @@ import base64
 import sys
 import uuid
 from collections.abc import Awaitable, Callable
+from typing import Any
 
 import boto3
 import httpx
 from botocore.config import Config
+from botocore.exceptions import ClientError
 from sqlalchemy import text
 
 from storymaker_api.bot import create_bot
@@ -63,6 +65,39 @@ def check_storage_sync(settings: Settings) -> str:
         aws_secret_access_key=secret.get_secret_value(),
         config=Config(signature_version="s3v4", s3={"addressing_style": "path"}),
     )
+    try:
+        return _exercise_storage(s3, settings)
+    except ClientError as error:
+        raise RuntimeError(_describe(error, settings)) from error
+
+
+def _describe(error: ClientError, settings: Settings) -> str:
+    """Ошибка S3 с подробностями: Supabase иногда отвечает не XML, и botocore теряет причину."""
+    response: Any = error.response
+    status = response.get("ResponseMetadata", {}).get("HTTPStatusCode")
+    code = response.get("Error", {}).get("Code") or "без кода"
+    message = response.get("Error", {}).get("Message") or ""
+    operation = error.operation_name
+    lines = [
+        f"{operation}: HTTP {status}, {code} {message}".rstrip(),
+        f"  endpoint: {settings.s3_endpoint_url}",
+        f"  регион: {settings.s3_region}, бакеты: {settings.s3_bucket_assets}, "
+        f"{settings.s3_bucket_originals}",
+    ]
+    body = response.get("_raw_body", b"")
+    if body:
+        lines.append(f"  ответ: {body[:300].decode(errors='replace')}")
+    if status == 404 and "/storage/v1/s3" not in (settings.s3_endpoint_url or ""):
+        lines.append("  подсказка: endpoint должен заканчиваться на /storage/v1/s3")
+    return "\n".join(lines)
+
+
+def _exercise_storage(s3: Any, settings: Settings) -> str:
+    def keep_body(http_response: Any, parsed: Any, **_: Any) -> None:
+        if http_response.status_code >= 300:
+            parsed.setdefault("_raw_body", http_response.content)
+
+    s3.meta.events.register("after-call.s3", keep_body)
     key = f"_doctor/{uuid.uuid4().hex}.webp"
     assets, originals = settings.s3_bucket_assets, settings.s3_bucket_originals
 
