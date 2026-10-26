@@ -7,10 +7,10 @@ from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from storymaker_api.bot import create_bot, create_dispatcher, register_webhook
+from storymaker_api.catalog import Catalog
 from storymaker_api.config import get_settings
 from storymaker_api.db import create_engine
-from storymaker_api.game.registry import load_builds
-from storymaker_api.routes import health, me, titles, webhook
+from storymaker_api.routes import health, me, studio, titles, webhook
 
 logger = logging.getLogger(__name__)
 
@@ -31,10 +31,9 @@ def create_app() -> FastAPI:
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         engine = create_engine(settings.database_url)
         app.state.sessionmaker = async_sessionmaker(engine, expire_on_commit=False)
-        app.state.titles = load_builds(settings.titles_dir)
-        app.state.title_ids = {}
+        app.state.catalog = Catalog()
         bot = create_bot(settings)
-        dispatcher = create_dispatcher(settings)
+        dispatcher = create_dispatcher(settings, app.state.sessionmaker)
         app.state.bot = bot
         app.state.dispatcher = dispatcher
 
@@ -63,5 +62,6 @@ def create_app() -> FastAPI:
     app.include_router(health.router)
     app.include_router(me.router)
     app.include_router(titles.router)
+    app.include_router(studio.router)
     app.include_router(webhook.router)
     return app

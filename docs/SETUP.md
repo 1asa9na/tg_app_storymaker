@@ -35,6 +35,7 @@ sudo mkdir -p /opt/storymaker && sudo chown deploy: /opt/storymaker
 A-записи на IP сервера:
 - `staging.<домен>`
 - `app.<домен>`
+- студия стейджинга — `devstudio.<домен>`; студия прода — по желанию, например `studio.<домен>`
 
 Сертификаты Let's Encrypt Caddy получит сам при первом деплое. Записи должны начать резолвиться до этого.
 
@@ -56,6 +57,7 @@ Workflow *Deploy* при каждой выкатке:
 | `DEPLOY_SSH_KEY` | да | Приватный SSH-ключ целиком, вместе со строками `BEGIN`/`END` | Файл `storymaker_deploy`, см. ниже |
 | `DEPLOY_KNOWN_HOSTS` | да | Отпечаток сервера | На своей машине: `ssh-keyscan -p <порт> -t ed25519 <ip-сервера>` (флаги до адреса); строку вывода целиком |
 | `APP_DOMAIN` | да | Домен окружения без `https://` | `staging.<домен>` или `app.<домен>` |
+| `STUDIO_DOMAIN` | для студии | Домен студии без `https://`. Без него студия окружения не открывается | `devstudio.<домен>` для staging |
 | `POSTGRES_PASSWORD` | да | Пароль базы | `openssl rand -hex 24` |
 | `BOT_TOKEN` | да | Токен бота этого окружения | @BotFather (шаг 1) |
 | `BOT_WEBHOOK_SECRET` | да | Секрет вебхука | `openssl rand -hex 32` |
@@ -121,7 +123,23 @@ docker exec storymaker-staging-api-1 python -m storymaker_api.doctor
 
 Скрипт запускается внутри работающего контейнера API с его настройками. Он проверяет базу, Telegram Bot API (бот и вебхук) и Supabase Storage: запись, presigned-загрузку и сохранение `Cache-Control`. Это спайк из `docs/PLAN.md` §10.4. Для прода — `storymaker-production-api-1`.
 
-Затем в Telegram: открыть стейджинг-бота → `/start` → «Открыть». Должно появиться «Привет, <имя>!».
+Затем в Telegram: открыть стейджинг-бота → `/start` → «Открыть». В каталоге — тайтлы из `content/titles` (при первом деплое они импортируются в базу и публикуются сами).
+
+## 9. Студия: первый вход
+
+1. A-запись `devstudio.<домен>` и секрет `STUDIO_DOMAIN` в окружении (шаги 3 и 4), перезапуск деплоя.
+2. Каждый, кого добавляете в команду, один раз открывает бота и нажимает `/start`: так он появляется в базе.
+3. На сервере (Telegram id можно узнать у @userinfobot):
+
+   ```bash
+   docker exec storymaker-staging-api-1 python -m storymaker_api.studio staff add <telegram_id> admin
+   docker exec storymaker-staging-api-1 python -m storymaker_api.studio staff list
+   ```
+
+   Роли: `admin` — всё; `designer` — импорт, сборка, публикация; `writer` — пока только смотрит (редактор сцен — этап 4). Убрать: `staff remove <telegram_id>`.
+4. В боте — `/studio`: бот пришлёт ссылку входа. Она действует 10 минут и один раз; сессия в студии — 30 дней.
+
+Тайтлы из `content/titles` попадают в базу только при первом деплое. Дальше их ведут в студии: «Скачать архивом» → правка YAML → «Импортировать папку» → «Собрать» → «Опубликовать».
 
 ## Ошибки (Sentry)
 

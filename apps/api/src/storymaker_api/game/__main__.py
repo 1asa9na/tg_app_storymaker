@@ -2,7 +2,6 @@
 
 uv run python -m storymaker_api.game check ../../content/titles/demo
 uv run python -m storymaker_api.game simulate ../../content/titles/demo --players 200
-uv run python -m storymaker_api.game build ../../content/titles --out build/titles
 """
 
 import argparse
@@ -10,7 +9,6 @@ import sys
 from pathlib import Path
 
 from storymaker_api.game.loader import load_title
-from storymaker_api.game.registry import dump_title
 from storymaker_api.game.scenes import EngineUnavailableError, ScenePlayer
 from storymaker_api.game.simulator import Settings, Simulation, report
 
@@ -31,13 +29,7 @@ def main() -> int:
     simulate.add_argument("--hours", type=float, default=24 * 14, help="горизонт, часов")
     simulate.add_argument("--seed", type=int, default=1)
 
-    build = commands.add_parser("build", help="собрать тайтлы в JSON для API")
-    build.add_argument("titles", type=Path, help="папка с папками тайтлов")
-    build.add_argument("--out", type=Path, required=True)
-
     args = parser.parse_args()
-    if args.command == "build":
-        return build_titles(args.titles, args.out)
     try:
         result = load_title(args.title)
     except EngineUnavailableError as error:
@@ -72,31 +64,6 @@ def main() -> int:
         runs = Simulation(result.title, player, settings).run()
     print(report(result.title, settings, runs))
     return 0
-
-
-def build_titles(root: Path, out: Path) -> int:
-    directories = sorted(path.parent for path in root.glob("*/title.yaml"))
-    if not directories:
-        print(f"✗ в {root} нет тайтлов", file=sys.stderr)
-        return 1
-    out.mkdir(parents=True, exist_ok=True)
-    failed = False
-    for directory in directories:
-        try:
-            result = load_title(directory)
-        except EngineUnavailableError as error:
-            print(f"✗ {error}", file=sys.stderr)
-            return 2
-        for warning in result.warnings:
-            print(f"⚠ {directory.name}: {warning}", file=sys.stderr)
-        for error in result.errors:
-            print(f"✗ {directory.name}: {error}", file=sys.stderr)
-        if result.errors or result.title is None:
-            failed = True
-            continue
-        (out / f"{result.title.id}.json").write_text(dump_title(result.title), encoding="utf-8")
-        print(f"✓ {result.title.id}: {result.title.config.name}")
-    return 1 if failed else 0
 
 
 if __name__ == "__main__":

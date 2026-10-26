@@ -1,0 +1,184 @@
+:root {
+  color-scheme: light;
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+  color: #1f1a2b;
+  background: #f6f4fa;
+}
+
+body {
+  margin: 0;
+}
+
+.shell main {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 24px;
+  background: #2b2140;
+  color: #fff;
+}
+
+.top a {
+  color: #fff;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.who {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  font-size: 14px;
+}
+
+h1 {
+  margin: 8px 0;
+}
+
+h2 {
+  margin: 24px 0 8px;
+  font-size: 18px;
+}
+
+.muted {
+  color: #6f6880;
+}
+
+.small {
+  font-size: 12px;
+}
+
+.error,
+.problems.error {
+  color: #b3261e;
+}
+
+.problems.warning {
+  color: #8a5a00;
+}
+
+.ok {
+  color: #1f7a3a;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+th,
+td {
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid #ece8f3;
+  vertical-align: top;
+}
+
+th {
+  font-size: 13px;
+  color: #6f6880;
+  font-weight: 600;
+}
+
+tr.active {
+  background: #eef8f0;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 20px 0;
+  padding: 16px;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.card h2 {
+  margin: 0;
+}
+
+.card.danger {
+  border: 1px solid #f0b4ae;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 14px;
+}
+
+input {
+  padding: 8px 10px;
+  border: 1px solid #d6d0e2;
+  border-radius: 8px;
+  font: inherit;
+}
+
+button,
+.button {
+  display: inline-block;
+  align-self: flex-start;
+  padding: 9px 16px;
+  border: none;
+  border-radius: 8px;
+  background: #6d4bb8;
+  color: #fff;
+  font: inherit;
+  font-size: 14px;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+button.secondary,
+.button.secondary {
+  background: #e6e0f2;
+  color: #2b2140;
+}
+
+button.small {
+  padding: 5px 10px;
+  font-size: 13px;
+}
+
+button.link {
+  padding: 0;
+  background: none;
+  color: inherit;
+  text-decoration: underline;
+}
+
+button:disabled,
+.button.disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 16px 0;
+}
+
+.badge {
+  margin-left: 6px;
+  color: #8a5a00;
+  font-size: 12px;
+  cursor: help;
+}

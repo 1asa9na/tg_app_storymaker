@@ -52,11 +52,12 @@ def test_state_starts_a_new_game(api: TestClient) -> None:
 
 
 def test_catalog_lists_titles_with_save(api: TestClient) -> None:
-    assert api.get("/api/titles").json() == [
-        {"slug": "test", "name": "Тест", "days": 3, "save": None}
-    ]
+    def entry() -> dict[str, Any]:
+        return next(t for t in api.get("/api/titles").json() if t["slug"] == "test")
+
+    assert entry() == {"slug": "test", "name": "Тест", "days": 3, "save": None}
     api.get("/api/titles/test/state")
-    assert api.get("/api/titles").json()[0]["save"] == {"day": 1, "finished": False}
+    assert entry()["save"] == {"day": 1, "finished": False}
 
 
 def test_game_data_has_no_rules(api: TestClient) -> None:

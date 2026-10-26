@@ -1,10 +1,10 @@
+import asyncio
 import hashlib
 import hmac
 import json
 import os
-import tempfile
 import time
-from collections.abc import Iterator
+from collections.abc import Awaitable, Callable, Iterator
 from pathlib import Path
 from urllib.parse import urlencode
 
@@ -22,24 +22,56 @@ import pytest
 from alembic import command
 from alembic.config import Config
 from fastapi.testclient import TestClient
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from storymaker_api.game.registry import dump_title
+from storymaker_api.db import create_engine
+from storymaker_api.game.registry import TitleBuild, dump_title
 from storymaker_api.game.schema import Title
 from storymaker_api.main import create_app
+from storymaker_api.models import Build, TitleRow
 from tests.game.conftest import TITLE
-
-# Тайтлы для API — тестовый тайтл движка, собранный в JSON, как при сборке образа.
-TITLES_DIR = Path(tempfile.mkdtemp(prefix="storymaker-titles-"))
-(TITLES_DIR / "test.json").write_text(dump_title(Title.model_validate(TITLE)), encoding="utf-8")
-os.environ["TITLES_DIR"] = str(TITLES_DIR)
 
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 WEBHOOK_SECRET = os.environ["BOT_WEBHOOK_SECRET"]
 
 
+def run_db[T](work: "Callable[[AsyncSession], Awaitable[T]]") -> T:
+    """Запрос к тестовой базе из синхронного теста — в своём event loop и своём движке."""
+
+    async def main() -> T:
+        engine = create_engine(os.environ["DATABASE_URL"])
+        try:
+            async with async_sessionmaker(engine, expire_on_commit=False)() as session:
+                return await work(session)
+        finally:
+            await engine.dispose()
+
+    return asyncio.run(main())
+
+
+async def _publish_test_title(session: AsyncSession) -> None:
+    """Тестовый тайтл движка (slug test) — опубликованной сборкой, как после студии."""
+    title = await session.scalar(select(TitleRow).where(TitleRow.slug == "test"))
+    if title is not None and title.active_build_id is not None:
+        return
+    if title is None:
+        title = TitleRow(slug="test", name="Тест", sort=-1)
+        session.add(title)
+        await session.flush()
+    data = dump_title(Title.model_validate(TITLE))
+    build = Build(title_id=title.id, version=1, hash=TitleBuild.from_json(data).build, data=data)
+    session.add(build)
+    await session.flush()
+    title.active_build_id = build.id
+    title.status = "published"
+    await session.commit()
+
+
 @pytest.fixture(scope="session")
 def migrated_database() -> None:
     command.upgrade(Config(str(Path(__file__).parents[1] / "alembic.ini")), "head")
+    run_db(_publish_test_title)
 
 
 @pytest.fixture

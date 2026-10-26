@@ -105,10 +105,11 @@ POST /api/titles/demo/actions
 
 ## Тайтлы на сервере
 
-Пока нет студии, тайтлы лежат в `content/titles/<slug>/` (формат — [TITLE_FORMAT.md](TITLE_FORMAT.md)). При сборке образа API они компилируются в `<slug>.json`; новая версия тайтла попадает на стейджинг вместе с деплоем `develop`. Локально:
+Игроки видят опубликованные тайтлы: у каждого в базе активная сборка, её выбирают и меняют в студии (`devstudio.<домен>`, см. docs/SETUP.md §9). Новая версия доходит до игроков со следующего запроса, без деплоя. Тайтлы из `content/titles` попадают в базу при первом деплое.
+
+Локально — так же, как на сервере:
 
 ```bash
 cd apps/api
-uv run python -m storymaker_api.game build ../../content/titles --out build/titles
-# в .env: TITLES_DIR=build/titles
+CONTENT_DIR=../../content/titles uv run python -m storymaker_api.studio seed
 ```
