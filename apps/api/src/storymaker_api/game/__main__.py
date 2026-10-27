@@ -10,7 +10,7 @@ from pathlib import Path
 
 from storymaker_api.game.loader import load_title
 from storymaker_api.game.scenes import EngineUnavailableError, ScenePlayer
-from storymaker_api.game.simulator import Settings, Simulation, report
+from storymaker_api.game.simulator import Settings, Simulation, parse_goal, report
 
 
 def main() -> int:
@@ -23,7 +23,9 @@ def main() -> int:
     simulate = commands.add_parser("simulate", help="прогнать симулятор баланса")
     simulate.add_argument("title", type=Path)
     simulate.add_argument("--players", type=int, default=100)
-    simulate.add_argument("--strategy", default="random", help="random или romance:<персонаж>")
+    simulate.add_argument(
+        "--strategy", default="random", help="random, romance:<персонаж> или goal:<метрика>:max|min"
+    )
     simulate.add_argument("--scene-strategy", default="free", choices=["free", "random", "first"])
     simulate.add_argument("--session-gap", type=float, default=4, help="часов между сессиями")
     simulate.add_argument("--hours", type=float, default=24 * 14, help="горизонт, часов")
@@ -55,6 +57,11 @@ def main() -> int:
         horizon_hours=args.hours,
         seed=args.seed,
     )
+    try:
+        parse_goal(settings.strategy, result.title)
+    except ValueError as error:
+        print(f"✗ {error}", file=sys.stderr)
+        return 1
     if settings.strategy.startswith("romance:"):
         focus = settings.strategy.removeprefix("romance:")
         if focus not in result.title.characters:

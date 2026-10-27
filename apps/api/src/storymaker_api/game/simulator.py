@@ -23,7 +23,7 @@ from storymaker_api.game.engine import (
     Sleep,
     Use,
 )
-from storymaker_api.game.schema import Title
+from storymaker_api.game.schema import Activity, Title
 from storymaker_api.game.state import GameState
 
 START = datetime(2026, 1, 1, 9, 0, tzinfo=UTC)
@@ -40,7 +40,9 @@ class Player(Protocol):
 @dataclass
 class Settings:
     players: int = 100
-    #: random — равномерно случайные занятия; romance:<персонаж> — упор на одного героя.
+    #: random — равномерно случайные занятия; romance:<персонаж> — упор на одного героя;
+    #: goal:<метрика>:max|min — двигать метрику в нужную сторону (stat.fitness, resource.money,
+    #: affection.anna, item.rose, global.xp).
     strategy: str = "random"
     #: Выборы в сценах: free — без платных вариантов, random, first.
     scene_strategy: str = "free"
@@ -61,6 +63,57 @@ class Run:
     xp: int = 0
     final: GameState | None = None
     stuck: bool = False
+    #: Значение метрики цели в начале каждого дня; ключ 0 — к концу симуляции.
+    metric_by_day: dict[int, float] = field(default_factory=dict)
+
+
+#: Метрики, которые может двигать стратегия-цель.
+METRIC_HEADS = ("stat", "resource", "affection", "item", "global")
+
+
+@dataclass(frozen=True)
+class Goal:
+    path: str
+    maximize: bool
+
+    @property
+    def sign(self) -> int:
+        return 1 if self.maximize else -1
+
+
+def parse_goal(strategy: str, title: Title) -> Goal | None:
+    """goal:<метрика>:max|min → Goal; ошибка — ValueError с понятным текстом."""
+    if not strategy.startswith("goal:"):
+        return None
+    path, _, direction = strategy.removeprefix("goal:").rpartition(":")
+    if direction not in ("max", "min"):
+        raise ValueError("цель: goal:<метрика>:max или goal:<метрика>:min")
+    head, _, key = path.partition(".")
+    known = {
+        "stat": title.config.stats,
+        "resource": title.config.resources,
+        "affection": title.characters,
+        "item": title.items,
+        "global": {"xp": None},
+    }
+    if head not in known or key not in known[head]:
+        raise ValueError(f"нет метрики {path}")
+    return Goal(path, direction == "max")
+
+
+def metric_name(path: str, title: Title) -> str:
+    head, _, key = path.partition(".")
+    match head:
+        case "stat":
+            return title.config.stats[key].name
+        case "resource":
+            return title.config.resources[key].name
+        case "affection":
+            return f"Симпатия: {title.characters[key].name}"
+        case "item":
+            return title.items[key].name
+        case _:
+            return "Опыт аккаунта"
 
 
 def _snapshot(state: GameState) -> dict[str, Any]:
@@ -84,6 +137,7 @@ class Simulation:
             if settings.strategy.startswith("romance:")
             else None
         )
+        self.goal = parse_goal(settings.strategy, title)
 
     def run(self) -> list[Run]:
         return [self._play_one(index) for index in range(self.settings.players)]
@@ -96,6 +150,7 @@ class Simulation:
         horizon = START + timedelta(hours=self.settings.horizon_hours)
         state = self.engine.new_game(now)
         run.day_reached_at[1] = 0.0
+        self._track(run, state, 1)
 
         for _ in range(100_000):
             if state.finished or now >= horizon:
@@ -120,9 +175,17 @@ class Simulation:
                     run.quests_done_on[quest] = state.day
             if outcome.new_day and state.day not in run.day_reached_at:
                 run.day_reached_at[state.day] = (now - START) / timedelta(hours=1)
+                self._track(run, state, state.day)
             now += ACTION_TIME
         run.final = state
+        self._track(run, state, 0)
         return run
+
+    def _track(self, run: Run, state: GameState, day: int) -> None:
+        if self.goal is not None:
+            path = self.goal.path
+            value = run.xp if path == "global.xp" else self.engine.read(state, path)
+            run.metric_by_day[day] = float(value)
 
     # ── Поведение игрока ────────────────────────────────────────────────
 
@@ -143,16 +206,18 @@ class Simulation:
 
         # Варианты: занятие здесь или переход туда, где есть доступные занятия.
         options: list[tuple[Action, float]] = [
-            (DoActivity(type="activity", id=key), 5.0 if self._is_focus(key) else 1.0)
+            (DoActivity(type="activity", id=key), self._weight(key))
             for key in self._affordable(state, state.location)
-            if not self._idle(key)
+            if not self._idle(key) and not self._against_goal(key)
         ]
         if not self._just_moved:
             for key in self.title.locations:
                 if key == state.location or self.engine.location_lock(state, key) is not None:
                     continue
                 if any(not self._idle(activity) for activity in self._affordable(state, key)):
-                    weight = 5.0 if self._has_focus(state, key) else 1.0
+                    weight = (
+                        5.0 if self._has_focus(state, key) or self._helps_at(state, key) else 1.0
+                    )
                     options.append((Go(type="go", location=key), weight))
         if options:
             actions, weights = zip(*options, strict=True)
@@ -196,6 +261,37 @@ class Simulation:
             if activity.location == location and self.engine.activity_lock(probe, key) is None
         ]
 
+    def _gain(self, activity: str) -> float:
+        """Насколько занятие двигает метрику цели в нужную сторону, с учётом цены."""
+        assert self.goal is not None
+        definition = self.title.activities[activity]
+        delta = float(definition.effects.add.get(self.goal.path, 0))
+        head, _, key = self.goal.path.partition(".")
+        if head == "resource":
+            delta -= definition.cost.resources.get(key, 0)
+        return delta * self.goal.sign
+
+    def _weight(self, activity: str) -> float:
+        if self.goal is not None:
+            # Полезное — тем чаще, чем больше сдвиг; нейтральное — как обычно.
+            gain = self._gain(activity)
+            return 5.0 + gain if gain > 0 else 1.0
+        return 5.0 if self._is_focus(activity) else 1.0
+
+    def _against_goal(self, activity: str) -> bool:
+        """Занятие уводит метрику не туда. Его не делают вовсе: занятие без затрат времени
+        (покупка) с любым малым весом повторялось бы, пока не кончатся деньги."""
+        return self.goal is not None and self._gain(activity) < 0
+
+    def _helps_at(self, state: GameState, location: str) -> bool:
+        return self.goal is not None and any(
+            self._gain(key) > 0 for key in self._affordable(state, location)
+        )
+
+    def _hurts(self, path: str, delta: int) -> bool:
+        """Подарок или расходник уводит метрику цели не туда."""
+        return self.goal is not None and path == self.goal.path and delta * self.goal.sign < 0
+
     def _is_focus(self, activity: str) -> bool:
         if self.focus is None:
             return False
@@ -222,6 +318,8 @@ class Simulation:
                     and definition
                     and definition.kind == "gift"
                     and liked.get(item, 0) > 0
+                    and not self._hurts(f"item.{item}", -1)
+                    and not self._hurts(f"affection.{character}", liked[item])
                 ):
                     return Gift(type="gift", item=item, character=character)
         return None
@@ -230,6 +328,11 @@ class Simulation:
         for item, count in state.items.items():
             definition = self.title.items.get(item)
             if count > 0 and definition and definition.kind == "consumable":
+                effects = definition.use.add
+                if self._hurts(f"item.{item}", -1) or any(
+                    self._hurts(path, delta) for path, delta in effects.items()
+                ):
+                    continue
                 return Use(type="use", item=item)
         return None
 
@@ -240,12 +343,21 @@ class Simulation:
                 continue
             probe = state.model_copy(update={"location": location})
             for key, activity in self.title.activities.items():
-                if activity.location != location:
+                if activity.location != location or self._against_goal(key):
                     continue
                 lock = self.engine.activity_lock(probe, key)
-                if lock and lock.startswith("Не хватает"):
+                if lock and lock.startswith("Не хватает") and self._regen_short(state, activity):
                     return True
         return False
+
+    def _regen_short(self, state: GameState, activity: Activity) -> bool:
+        """Не хватает ресурса, который восстанавливается со временем: ждать имеет смысл.
+        Деньги сами не появятся — ради них ждать бесполезно."""
+        resources = self.title.config.resources
+        return any(
+            state.resources[key].value < amount and resources[key].regen is not None
+            for key, amount in activity.cost.resources.items()
+        )
 
 
 # ── Отчёт ───────────────────────────────────────────────────────────────
@@ -329,6 +441,33 @@ def report(title: Title, settings: Settings, runs: list[Run]) -> str:
         for key, stat in title.config.stats.items():
             values = [float(run.final.stats.get(key, 0)) for run in runs if run.final]
             lines.append(f"| {stat.name} | {_median(values)} |")
+
+    if settings.strategy.startswith("goal:"):
+        goal = parse_goal(settings.strategy, title)
+        assert goal is not None
+        direction = "максимизация" if goal.maximize else "минимизация"
+        lines += [
+            "",
+            f"## Цель: {metric_name(goal.path, title)} — {direction}",
+            "",
+            "| День | Медиана | Минимум | Максимум |",
+            "|---|---|---|---|",
+        ]
+        tracked = sorted(
+            {
+                day
+                for run in runs
+                for day in run.metric_by_day
+                if day > 0 and (last is None or day <= last)
+            }
+        )
+        for day in [*tracked, 0]:
+            values = [run.metric_by_day[day] for run in runs if day in run.metric_by_day]
+            if values:
+                label = "к концу" if day == 0 else str(day)
+                lines.append(
+                    f"| {label} | {_median(values)} | {min(values):.0f} | {max(values):.0f} |"
+                )
 
     achievements: dict[str, int] = defaultdict(int)
     for run in runs:

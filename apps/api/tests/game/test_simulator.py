@@ -7,7 +7,7 @@ import pytest
 from storymaker_api.game.loader import load_title
 from storymaker_api.game.scenes import ENGINE_DIR, ScenePlayer
 from storymaker_api.game.schema import Title
-from storymaker_api.game.simulator import Settings, Simulation, report
+from storymaker_api.game.simulator import Settings, Simulation, parse_goal, report
 from tests.game.conftest import TITLE
 
 DEMO = Path(__file__).parents[4] / "content" / "titles" / "demo"
@@ -43,6 +43,35 @@ def test_report_lists_days_scenes_and_quests() -> None:
     assert "| 3 | 100% |" in text
     assert "| anna_meet |" in text
     assert "| anna_trust |" in text
+
+
+def test_goal_strategy_moves_its_metric() -> None:
+    title = Title.model_validate(TITLE)
+
+    def fitness(strategy: str) -> list[float]:
+        settings = Settings(players=8, strategy=strategy, seed=5)
+        runs = Simulation(title, SilentScenes(), settings).run()
+        return [run.metric_by_day[0] for run in runs]
+
+    high = fitness("goal:stat.fitness:max")
+    low = fitness("goal:stat.fitness:min")
+
+    assert min(high) > max(low)
+    assert max(low) == 0  # тренировка — единственный способ поднять форму, её избегают
+
+
+def test_goal_report_and_validation() -> None:
+    title = Title.model_validate(TITLE)
+    settings = Settings(players=3, strategy="goal:resource.money:max")
+
+    text = report(title, settings, Simulation(title, SilentScenes(), settings).run())
+
+    assert "## Цель: Деньги — максимизация" in text
+    assert "| к концу |" in text
+    with pytest.raises(ValueError, match=r"нет метрики stat\.nope"):
+        parse_goal("goal:stat.nope:max", title)
+    with pytest.raises(ValueError, match="max или"):
+        parse_goal("goal:stat.fitness:up", title)
 
 
 @pytest.mark.skipif(not HAS_NODE, reason="нужен Node.js и pnpm install в packages/engine")
