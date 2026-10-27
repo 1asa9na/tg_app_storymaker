@@ -282,6 +282,8 @@ a.button.small {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 10px;
+  /* Длинная подпись переносится вверх, а поля остаются на одной линии */
+  align-items: end;
 }
 
 select {
