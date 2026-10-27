@@ -6,7 +6,17 @@ import type { Change, GameData, View } from "./types.ts";
 export type Tab = "place" | "map" | "bag" | "journal" | "people";
 
 /** День, время суток, ресурсы с таймером восстановления. */
-export function TopBar({ game, view, onRegen }: { game: GameData; view: View; onRegen(): void }) {
+export function TopBar({
+  game,
+  view,
+  badge,
+  onRegen,
+}: {
+  game: GameData;
+  view: View;
+  badge?: string;
+  onRegen(): void;
+}) {
   const [now, setNow] = useState(() => Date.now());
   const timers = Object.values(view.resources).some((r) => r.next_at);
 
@@ -34,6 +44,7 @@ export function TopBar({ game, view, onRegen }: { game: GameData; view: View; on
           {view.time.weekday ? `${view.time.weekday}, ` : ""}
           {slot.toLowerCase()}
         </span>
+        {badge && <em className="gu-badge">{badge}</em>}
       </div>
       <div className="gu-resources">
         {Object.entries(view.resources).map(([key, r]) => (

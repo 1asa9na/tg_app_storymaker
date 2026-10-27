@@ -324,3 +324,152 @@ def test_bad_asset_name_is_explained(client: TestClient) -> None:
 
     assert response.status_code == 422
     assert response.json()["detail"]["errors"][0].startswith("Gym.png: имя — латиница")
+
+
+def staff_tg_id(client: TestClient) -> int:
+    """Telegram id сотрудника, вошедшего в студию этим клиентом."""
+    member = client.get("/api/studio/me").json()
+
+    async def work(session: AsyncSession) -> int:
+        user = await session.get(User, member["id"])
+        assert user is not None
+        return user.tg_id
+
+    return run_db(work)
+
+
+def published_mini(client: TestClient) -> tuple[str, int]:
+    key = slug()
+    files = {
+        "title.yaml": CONFIG,
+        "locations.yaml": LOCATIONS + "park: {name: Парк, background: park}\n",
+    }
+    post(client, f"/api/studio/titles/{key}/import", {"files": files})
+    build = post(client, f"/api/studio/titles/{key}/builds", {}).json()
+    post(client, f"/api/studio/titles/{key}/publish", {"build_id": build["id"]})
+    return key, build["id"]
+
+
+def act_in(client: TestClient, base: str, action: dict[str, Any], **extra: Any) -> Any:
+    body = {"request_id": str(uuid.uuid4()), "action": action}
+    return client.post(f"{base}/actions", json=body, headers={**HEADERS, **extra})
+
+
+def test_sandbox_is_separate_from_the_real_game(client: TestClient) -> None:
+    studio(client)
+    key, build_id = published_mini(client)
+    sandbox = f"/api/studio/titles/{key}/builds/{build_id}/sandbox"
+    player = {
+        "Authorization": f"tma {make_init_data({'id': staff_tg_id(client), 'first_name': 'С'})}"
+    }
+
+    first = client.get(f"{sandbox}/state").json()
+    moved = act_in(client, sandbox, {"type": "go", "location": "park"})
+    real = client.get(f"/api/titles/{key}/state", headers=player).json()
+
+    assert first["here"]["location"] == "home"
+    assert moved.json()["here"]["location"] == "park"
+    assert real["here"]["location"] == "home"
+    assert client.get(f"{sandbox}/game").json()["name"] == "Мини"
+    log = client.get(f"{sandbox}/debug/log").json()
+    assert [entry["action"] for entry in log] == [{"type": "go", "location": "park"}]
+
+
+def test_sandbox_debug_edits_state(client: TestClient) -> None:
+    studio(client)
+    key, build_id = published_mini(client)
+    sandbox = f"/api/studio/titles/{key}/builds/{build_id}/sandbox"
+    state = client.get(f"{sandbox}/state").json()["state"]
+
+    edited = client.put(
+        f"{sandbox}/debug/state",
+        json={"state": {**state, "day": 5, "location": "park", "global_level": 3}},
+        headers=HEADERS,
+    )
+    broken = client.put(
+        f"{sandbox}/debug/state",
+        json={"state": {**state, "location": "moon", "items": {"sword": 1}}},
+        headers=HEADERS,
+    )
+
+    assert edited.status_code == 200
+    assert edited.json()["time"]["day"] == 5
+    assert edited.json()["here"]["location"] == "park"
+    assert edited.json()["account"]["level"] == 3
+    assert broken.status_code == 422
+    assert broken.json()["detail"]["errors"] == ["нет локации moon", "нет предмета sword"]
+
+
+def test_sandbox_does_not_grant_account_xp(client: TestClient) -> None:
+    studio(client)
+    key = slug()
+    workout = (
+        "gym: {name: Зал, location: home, cost: {slots: 0}, effects: {add: {global.xp: 40}}}\n"
+    )
+    files = {"title.yaml": CONFIG, "locations.yaml": LOCATIONS, "activities.yaml": workout}
+    post(client, f"/api/studio/titles/{key}/import", {"files": files})
+    build = post(client, f"/api/studio/titles/{key}/builds", {}).json()
+    sandbox = f"/api/studio/titles/{key}/builds/{build['id']}/sandbox"
+    player = {
+        "Authorization": f"tma {make_init_data({'id': staff_tg_id(client), 'first_name': 'С'})}"
+    }
+    before = client.get("/api/profile", headers=player).json()["xp"]
+
+    result = act_in(client, sandbox, {"type": "activity", "id": "gym"}).json()
+
+    assert result["outcome"]["xp"] == 40
+    assert client.get("/api/profile", headers=player).json()["xp"] == before
+
+
+def test_preview_opens_sandbox_on_phone_for_staff_only(client: TestClient) -> None:
+    from storymaker_api.studio.sandbox import create_preview_token
+
+    studio(client)
+    key, build_id = published_mini(client)
+    staff_id = client.get("/api/studio/me").json()["id"]
+    sandbox = f"/api/studio/titles/{key}/builds/{build_id}/sandbox"
+    act_in(client, sandbox, {"type": "go", "location": "park"})
+
+    async def issue(session: AsyncSession) -> str:
+        token = await create_preview_token(session, build_id, staff_id, datetime.now(UTC))
+        await session.commit()
+        return token
+
+    token = run_db(issue)
+    staff = {
+        "Authorization": f"tma {make_init_data({'id': staff_tg_id(client), 'first_name': 'С'})}"
+    }
+    stranger = {"Authorization": f"tma {make_init_data({'id': 7, 'first_name': 'Ч'})}"}
+
+    phone = client.get(f"/api/preview/{token}/state", headers=staff)
+
+    assert phone.status_code == 200
+    # То же сохранение, что в песочнице студии.
+    assert phone.json()["here"]["location"] == "park"
+    assert client.get(f"/api/preview/{token}/state", headers=stranger).status_code == 404
+    assert client.get("/api/preview/nope/state", headers=staff).status_code == 404
+
+
+def test_preview_needs_public_url(client: TestClient) -> None:
+    studio(client)
+    key, build_id = published_mini(client)
+
+    response = post(client, f"/api/studio/titles/{key}/builds/{build_id}/preview", {})
+
+    assert response.status_code == 409
+
+
+@needs_node
+def test_simulator_runs_on_a_build(client: TestClient) -> None:
+    studio(client)
+    key = slug()
+    post(client, f"/api/studio/titles/{key}/import", {"files": read_directory(DEMO)})
+    build = post(client, f"/api/studio/titles/{key}/builds", {}).json()
+    url = f"/api/studio/titles/{key}/builds/{build['id']}/simulate"
+
+    report = post(client, url, {"players": 5, "strategy": "romance:anna"})
+    unknown = post(client, url, {"players": 5, "strategy": "romance:nobody"})
+
+    assert report.status_code == 200, report.json()
+    assert report.json()["report"].startswith("# Симуляция «Неделя в новом городе»")
+    assert unknown.status_code == 422

@@ -1,6 +1,6 @@
 import type { Effect } from "@storymaker/engine";
 import type { AssetResolver } from "@storymaker/vn-renderer";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { DaySummary, Sheet, TabBar, Toasts, TopBar, type Tab, type Toast } from "./chrome.tsx";
 import { describeOutcome, formatCost, formatEffects, sumChanges } from "./format.ts";
@@ -31,6 +31,10 @@ export interface GameScreenProps {
    */
   onBackHandler?(handler: () => void): void;
   onExit(): void;
+  /** Метка в панели сверху, например «Превью v3» в песочнице. */
+  badge?: string;
+  /** Состояние изменилось (действие, обновление) — для панели отладки песочницы. */
+  onChange?(view: View): void;
 }
 
 type Sheet =
@@ -47,10 +51,19 @@ export function GameScreen({
   haptic,
   onBackHandler,
   onExit,
+  badge,
+  onChange,
 }: GameScreenProps) {
   const [game, setGame] = useState<GameData | null>(null);
   const [view, setView] = useState<View | null>(null);
   const [failed, setFailed] = useState(false);
+  const onChangeRef = useRef(onChange);
+  useLayoutEffect(() => {
+    onChangeRef.current = onChange;
+  });
+  useEffect(() => {
+    if (view) onChangeRef.current?.(view);
+  }, [view]);
   const [tab, setTab] = useState<Tab>("map");
   const [sheet, setSheet] = useState<Sheet | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -205,7 +218,7 @@ export function GameScreen({
 
   return (
     <div className={busy ? "gu-game gu-busy" : "gu-game"}>
-      <TopBar game={game} view={view} onRegen={refresh} />
+      <TopBar game={game} view={view} badge={badge} onRegen={refresh} />
       <main className="gu-body">
         {current === "place" && (
           <PlacePanel

@@ -3,9 +3,11 @@
 Вход — cookie-сессия (studio/auth.py), не initData: студия — сайт, а не Mini App.
 """
 
+import asyncio
 from datetime import UTC, datetime
 from typing import Annotated, Any, Literal, cast
 
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from fastapi import (
     APIRouter,
     Cookie,
@@ -20,6 +22,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from storymaker_api import play
 from storymaker_api.assets import (
     LABELS,
     MAX_BYTES,
@@ -29,6 +32,7 @@ from storymaker_api.assets import (
     file_name,
     referenced,
 )
+from storymaker_api.catalog import Catalog
 from storymaker_api.config import Settings, get_settings
 from storymaker_api.content import (
     create_build,
@@ -41,7 +45,9 @@ from storymaker_api.content import (
     upload_asset,
 )
 from storymaker_api.db import get_session
+from storymaker_api.game.scenes import EngineUnavailableError
 from storymaker_api.game.schema import Id
+from storymaker_api.game.simulator import Settings as SimulationSettings
 from storymaker_api.models import (
     Asset,
     AssetVersion,
@@ -51,6 +57,7 @@ from storymaker_api.models import (
     TitleRow,
     User,
 )
+from storymaker_api.routes.game import game_routes
 from storymaker_api.studio.auth import (
     COOKIE,
     SESSION_TTL,
@@ -61,6 +68,7 @@ from storymaker_api.studio.auth import (
     require,
     staff_role,
 )
+from storymaker_api.studio.sandbox import MAX_PLAYERS, create_preview_token, simulate
 
 router = APIRouter(prefix="/api/studio")
 
@@ -412,3 +420,119 @@ async def assets(slug: str, session: SessionDep, member: MemberDep) -> dict[str,
             for kind, key in sorted(needed - present)
         ],
     }
+
+
+# ── Песочница, превью, симулятор ────────────────────────────────────────
+
+
+def get_catalog(request: Request) -> Catalog:
+    return request.app.state.catalog
+
+
+async def member_user(member: MemberDep) -> User:
+    return member.user
+
+
+async def _build_of(
+    session: AsyncSession, request: Request, slug: str, build_id: int
+) -> tuple[TitleRow, Build]:
+    row = await _title(session, slug)
+    build = await session.get(Build, build_id)
+    if build is None or build.title_id != row.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "build not found")
+    return row, build
+
+
+async def sandbox_game(
+    slug: str, build_id: int, request: Request, session: SessionDep, member: MemberDep
+) -> play.Game:
+    """Любая сборка тайтла — в песочнице сотрудника (слот sandbox:<сборка>)."""
+    del member
+    row, build = await _build_of(session, request, slug, build_id)
+    loaded = await get_catalog(request).build(session, build.id)
+    assert loaded is not None
+    return play.Game(loaded, row.id, play.sandbox_slot(build.id))
+
+
+game_routes(
+    router, "/titles/{slug}/builds/{build_id}/sandbox", sandbox_game, member_user, debug=True
+)
+
+
+@router.post("/titles/{slug}/builds/{build_id}/preview")
+async def preview(
+    slug: str,
+    build_id: int,
+    request: Request,
+    session: SessionDep,
+    member: MemberDep,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict[str, Any]:
+    """Песочница на телефоне: бот присылает сотруднику кнопку, открывающую сборку в Mini App."""
+    row, build = await _build_of(session, request, slug, build_id)
+    if not settings.public_url:
+        raise HTTPException(status.HTTP_409_CONFLICT, {"code": "no_public_url"})
+    token = await create_preview_token(session, build.id, member.user.id, datetime.now(UTC))
+    await session.commit()
+    url = f"{settings.public_url.rstrip('/')}/?preview={token}"
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text="Открыть превью", web_app=WebAppInfo(url=url))]]
+    )
+    try:
+        await request.app.state.bot.send_message(
+            member.user.tg_id,
+            f"Превью «{row.name}», версия {build.version}. Ссылка действует 7 дней, "
+            "прогресс — в песочнице, не в игре.",
+            reply_markup=keyboard,
+        )
+        sent = True
+    except Exception:
+        # Бот может не достучаться (не нажат /start) — ссылка всё равно в ответе.
+        sent = False
+    return {"url": url, "sent": sent}
+
+
+class SimulateRequest(BaseModel):
+    players: int = Field(default=50, ge=1, le=MAX_PLAYERS)
+    #: random или romance:<персонаж>
+    strategy: str = "random"
+    scene_strategy: Literal["free", "random", "first"] = "free"
+    session_gap_hours: float = Field(default=4, gt=0, le=72)
+    horizon_hours: float = Field(default=24 * 14, gt=0, le=24 * 60)
+    seed: int = 1
+
+
+@router.post("/titles/{slug}/builds/{build_id}/simulate")
+async def simulate_build(
+    slug: str,
+    build_id: int,
+    body: SimulateRequest,
+    request: Request,
+    session: SessionDep,
+    member: EditorDep,
+) -> dict[str, Any]:
+    """Симулятор баланса по сборке: отчёт в Markdown (docs/TITLE_FORMAT.md, «Симулятор»)."""
+    del member
+    _, build = await _build_of(session, request, slug, build_id)
+    loaded = await get_catalog(request).build(session, build.id)
+    assert loaded is not None
+    if body.strategy.startswith("romance:"):
+        focus = body.strategy.removeprefix("romance:")
+        if focus not in loaded.title.characters:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, f"нет персонажа {focus}")
+    elif body.strategy != "random":
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT, "стратегия: random или romance:<персонаж>"
+        )
+    settings = SimulationSettings(
+        players=body.players,
+        strategy=body.strategy,
+        scene_strategy=body.scene_strategy,
+        session_gap_hours=body.session_gap_hours,
+        horizon_hours=body.horizon_hours,
+        seed=body.seed,
+    )
+    try:
+        return await asyncio.to_thread(simulate, loaded, settings)
+    except EngineUnavailableError as error:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(error)) from None

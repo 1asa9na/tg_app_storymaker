@@ -93,7 +93,15 @@ export class Api {
   profile = () => this.request<Profile>("GET", "/api/profile");
 
   title(slug: string): GameClient {
-    const base = `/api/titles/${encodeURIComponent(slug)}`;
+    return this.game(`/api/titles/${encodeURIComponent(slug)}`);
+  }
+
+  /** Песочница сборки по превью-ссылке из студии — только для команды. */
+  preview(token: string): GameClient {
+    return this.game(`/api/preview/${encodeURIComponent(token)}`);
+  }
+
+  private game(base: string): GameClient {
     return {
       game: () => this.request<GameData>("GET", `${base}/game`),
       state: () => this.request<View>("GET", `${base}/state`),

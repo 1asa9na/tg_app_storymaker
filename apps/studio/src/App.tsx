@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState, type ReactNode } from "react";
 
 import {
   api,
@@ -11,11 +11,20 @@ import {
   type TitleSummary,
 } from "./api";
 
-type Route = { page: "titles" } | { page: "title"; slug: string } | { page: "login" };
+type Route =
+  | { page: "titles" }
+  | { page: "title"; slug: string }
+  | { page: "sandbox"; slug: string; buildId: number }
+  | { page: "login" };
+
+// Песочница тянет экран игры с рантаймом ink — грузится, только когда её открыли.
+const Sandbox = lazy(() => import("./Sandbox").then((m) => ({ default: m.Sandbox })));
 
 function parseRoute(): Route {
   const path = window.location.pathname;
   if (path === "/login") return { page: "login" };
+  const sandbox = /^\/t\/([a-z][a-z0-9_]*)\/b\/(\d+)$/.exec(path);
+  if (sandbox) return { page: "sandbox", slug: sandbox[1]!, buildId: Number(sandbox[2]) };
   const match = /^\/t\/([a-z][a-z0-9_]*)$/.exec(path);
   return match ? { page: "title", slug: match[1]! } : { page: "titles" };
 }
@@ -71,6 +80,9 @@ export function App() {
     <Shell member={member} onLogout={() => api.logout().finally(() => setMember(null))}>
       {route.page === "titles" && <Titles member={member} />}
       {route.page === "title" && <Title slug={route.slug} member={member} />}
+      {route.page === "sandbox" && (
+        <SandboxPage slug={route.slug} buildId={route.buildId} member={member} />
+      )}
     </Shell>
   );
 }
@@ -443,7 +455,14 @@ function Title({ slug, member }: { slug: string; member: Member }) {
                 <td>{new Date(build.created_at).toLocaleString("ru")}</td>
                 <td>{build.created_by ?? "—"}</td>
                 <td>{build.notes}</td>
-                <td>
+                <td className="row-actions">
+                  <a
+                    className="button small secondary"
+                    href={`/t/${slug}/b/${build.id}`}
+                    onClick={(e) => (e.preventDefault(), navigate(`/t/${slug}/b/${build.id}`))}
+                  >
+                    Песочница
+                  </a>
                   {build.active ? (
                     <strong>у игроков</strong>
                   ) : (
@@ -584,5 +603,34 @@ function Assets({ slug, editor }: { slug: string; editor: boolean }) {
         <p className="muted">Ассетов пока нет.</p>
       )}
     </section>
+  );
+}
+
+function SandboxPage({ slug, buildId, member }: { slug: string; buildId: number; member: Member }) {
+  const [title, setTitle] = useState<TitleDetail | null>(null);
+
+  useEffect(() => {
+    api.title(slug).then(setTitle, () => setTitle(null));
+  }, [slug]);
+
+  const build = title?.builds.find((b) => b.id === buildId);
+  return (
+    <>
+      <p className="muted">
+        <a href={`/t/${slug}`} onClick={(e) => (e.preventDefault(), navigate(`/t/${slug}`))}>
+          ← {title?.name ?? slug}
+        </a>{" "}
+        · песочница версии {build?.version ?? "…"}
+        {build?.active ? " (у игроков)" : ""}
+      </p>
+      <Suspense fallback={<p className="muted">Загружаем песочницу…</p>}>
+        <Sandbox
+          slug={slug}
+          buildId={buildId}
+          version={build?.version ?? null}
+          editor={canEdit(member)}
+        />
+      </Suspense>
+    </>
   );
 }

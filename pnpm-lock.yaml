@@ -72,6 +72,9 @@ importers:
 
   apps/studio:
     dependencies:
+      '@storymaker/game-ui':
+        specifier: workspace:*
+        version: link:../../packages/game-ui
       react:
         specifier: ^19.3.1
         version: 19.3.1

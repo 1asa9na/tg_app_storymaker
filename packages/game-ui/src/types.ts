@@ -58,6 +58,7 @@ export interface Account {
 }
 
 export interface SaveState {
+  title: string;
   day: number;
   slot: number;
   location: string | null;
@@ -67,6 +68,10 @@ export interface SaveState {
   flags: Record<string, boolean>;
   quests: Record<string, { status: "active" | "done"; stage: number }>;
   gifts_today: Record<string, number>;
+  resources: Record<string, { value: number; anchor: string | null }>;
+  events_seen: string[];
+  achievements: string[];
+  pending_scenes: { scene: string; event: string }[];
   global_level: number;
   finished: boolean;
 }

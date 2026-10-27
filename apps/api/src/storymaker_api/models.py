@@ -142,6 +142,18 @@ class AssetVersion(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class PreviewToken(Base):
+    """Ссылка на песочницу сборки для телефона: открывает её в Mini App у сотрудника."""
+
+    __tablename__ = "preview_tokens"
+
+    token_hash: Mapped[str] = mapped_column(Text, primary_key=True)
+    build_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("builds.id"))
+    created_by: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class Staff(Base):
     """Команда: кто может войти в студию и что там делать."""
 

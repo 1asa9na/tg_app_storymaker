@@ -12,7 +12,7 @@ from storymaker_api.bot import create_bot, create_dispatcher, register_webhook
 from storymaker_api.catalog import Catalog
 from storymaker_api.config import get_settings
 from storymaker_api.db import create_engine
-from storymaker_api.routes import health, me, studio, titles, webhook
+from storymaker_api.routes import health, me, preview, studio, titles, webhook
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +66,7 @@ def create_app() -> FastAPI:
     app.include_router(me.router)
     app.include_router(titles.router)
     app.include_router(studio.router)
+    app.include_router(preview.router)
     app.include_router(webhook.router)
     if settings.app_env == "local":
         # На сервере /assets раздаёт Caddy с того же диска; локально — сам API.

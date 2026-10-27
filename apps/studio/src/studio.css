@@ -15,7 +15,7 @@ body {
 }
 
 .shell main {
-  max-width: 960px;
+  max-width: 1280px;
   margin: 0 auto;
   padding: 24px;
 }
@@ -235,4 +235,106 @@ button:disabled,
 
 .warning-text {
   color: #8a5a00;
+}
+
+.row-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+a.button.small {
+  padding: 5px 10px;
+  font-size: 13px;
+}
+
+/* Песочница: телефон слева, панели справа */
+.sandbox {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+.phone {
+  position: sticky;
+  top: 16px;
+  flex: none;
+  width: 390px;
+  height: 800px;
+  overflow: hidden;
+  border: 10px solid #1d1726;
+  border-radius: 36px;
+  background: #15121c;
+  /* transform делает рамку контейнером для position: fixed внутри экрана игры */
+  transform: translateZ(0);
+}
+
+.panels {
+  flex: 1;
+  min-width: 0;
+}
+
+.panels .card {
+  margin-top: 0;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+select {
+  padding: 8px 10px;
+  border: 1px solid #d6d0e2;
+  border-radius: 8px;
+  font: inherit;
+  background: #fff;
+}
+
+.flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  align-items: center;
+}
+
+label.check {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+.add-flag {
+  display: flex;
+  gap: 6px;
+}
+
+.log {
+  margin: 0;
+  padding-left: 20px;
+  max-height: 260px;
+  overflow-y: auto;
+  line-height: 1.6;
+  font-size: 14px;
+}
+
+.report table {
+  margin: 6px 0 14px;
+  font-size: 14px;
+}
+
+.report p {
+  margin: 4px 0;
+}
+
+@media (max-width: 900px) {
+  .sandbox {
+    flex-direction: column;
+  }
+
+  .phone {
+    position: relative;
+    top: 0;
+  }
 }
