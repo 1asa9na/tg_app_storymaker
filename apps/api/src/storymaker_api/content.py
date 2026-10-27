@@ -9,16 +9,37 @@ import asyncio
 import io
 import zipfile
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 import yaml
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from storymaker_api.assets import (
+    LABELS,
+    AssetError,
+    Kind,
+    Storage,
+    build_manifest,
+    file_hash,
+    file_name,
+    original_path,
+    parse_name,
+    process,
+    referenced,
+    variant_path,
+)
 from storymaker_api.game.loader import SECTIONS, Files, assemble, parse_files
 from storymaker_api.game.registry import TitleBuild, dump_title
 from storymaker_api.game.schema import Title
-from storymaker_api.models import Build, SceneSource, TitleDocument, TitleRow
+from storymaker_api.models import (
+    Asset,
+    AssetVersion,
+    Build,
+    SceneSource,
+    TitleDocument,
+    TitleRow,
+)
 
 #: Разделы из одного документа (ключ main), остальные — словарь сущностей.
 SINGLE = {"config", "map"}
@@ -117,6 +138,14 @@ async def create_build(
     result = await asyncio.to_thread(assemble, title.slug, content.sections, content.scenes)
     if result.errors or result.title is None:
         return BuildResult(None, result.errors, result.warnings)
+    current = await current_assets(session, title.id)
+    present = {(kind, key) for kind, key, _ in current}
+    missing = sorted(referenced(content.sections, content.scenes) - present)
+    # Пока арт не готов, плеер рисует заглушки: недостающий ассет — предупреждение, не ошибка.
+    result.warnings += [
+        f"нет ассета: {LABELS[kind]} {key} ({file_name(kind, key)}) — будет заглушка"
+        for kind, key in missing
+    ]
     data = dump_title(result.title)
     version = await session.scalar(
         select(func.coalesce(func.max(Build.version), 0) + 1).where(Build.title_id == title.id)
@@ -126,6 +155,7 @@ async def create_build(
         version=version or 1,
         hash=TitleBuild.from_json(data).build,
         data=data,
+        manifest=build_manifest(current),
         warnings=result.warnings,
         notes=notes,
         created_by=user_id,
@@ -183,3 +213,101 @@ async def publish(
     title.status = "published"
     await session.flush()
     return []
+
+
+# ── Ассеты ──────────────────────────────────────────────────────────────
+
+
+async def current_assets(
+    session: AsyncSession, title_id: int
+) -> list[tuple[Kind, str, dict[str, str]]]:
+    """Текущие версии ассетов тайтла: (вид, ключ, варианты)."""
+    rows = await session.execute(
+        select(Asset.kind, Asset.key, AssetVersion.variants)
+        .join(AssetVersion, AssetVersion.id == Asset.current_version_id)
+        .where(Asset.title_id == title_id)
+    )
+    return [(cast(Kind, kind), key, variants) for kind, key, variants in rows]
+
+
+@dataclass
+class Uploaded:
+    asset: Asset
+    version: AssetVersion
+    unchanged: bool = False
+
+
+async def upload_asset(
+    session: AsyncSession,
+    storage: Storage,
+    title: TitleRow,
+    filename: str,
+    data: bytes,
+    user_id: int | None,
+) -> Uploaded:
+    """Новая версия ассета по имени файла. Тот же файл ещё раз — без изменений."""
+    name = parse_name(filename)
+    asset = await session.scalar(
+        select(Asset).where(
+            Asset.title_id == title.id, Asset.kind == name.kind, Asset.key == name.key
+        )
+    )
+    digest = file_hash(data)
+    if asset is not None and asset.current_version_id is not None:
+        current = await session.get(AssetVersion, asset.current_version_id)
+        if current is not None and current.hash == digest:
+            return Uploaded(asset, current, unchanged=True)
+
+    processed = await asyncio.to_thread(process, name, data)
+    if name.kind == "sprite":
+        # Все эмоции персонажа — на одном холсте: иначе смена эмоции дёргает фигуру.
+        other = await session.execute(
+            select(Asset.key, AssetVersion.width, AssetVersion.height)
+            .join(AssetVersion, AssetVersion.id == Asset.current_version_id)
+            .where(
+                Asset.title_id == title.id,
+                Asset.kind == "sprite",
+                Asset.key.startswith(f"{name.character}_"),
+                Asset.key != name.key,
+            )
+            .limit(1)
+        )
+        for key, width, height in other:
+            if (width, height) != (processed.width, processed.height):
+                raise AssetError(
+                    f"холст {processed.width}×{processed.height}, а у {key} — {width}×{height}: "
+                    "все эмоции персонажа рисуются на одном холсте"
+                )
+
+    paths = {
+        variant.name: variant_path(title.slug, digest, variant) for variant in processed.variants
+    }
+    original = original_path(title.slug, name, digest)
+
+    def store() -> None:
+        storage.put_original(original, data)
+        for variant in processed.variants:
+            storage.put_variant(paths[variant.name], variant)
+
+    await asyncio.to_thread(store)
+    if asset is None:
+        asset = Asset(title_id=title.id, kind=name.kind, key=name.key)
+        session.add(asset)
+        await session.flush()
+    version = AssetVersion(
+        asset_id=asset.id,
+        original_key=original,
+        hash=digest,
+        filename=filename,
+        width=processed.width,
+        height=processed.height,
+        bytes=len(data),
+        variants=paths,
+        warnings=processed.warnings,
+        uploaded_by=user_id,
+    )
+    session.add(version)
+    await session.flush()
+    asset.current_version_id = version.id
+    await session.flush()
+    return Uploaded(asset, version)

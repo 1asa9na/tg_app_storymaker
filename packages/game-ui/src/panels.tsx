@@ -1,6 +1,5 @@
-import type { AssetResolver } from "@storymaker/vn-renderer";
-
 import { formatCost, formatEffects, questJournal, relationLevel } from "./format.ts";
+import type { GameAssets } from "./placeholders.ts";
 import type { Activity, GameData, View } from "./types.ts";
 
 function names(game: GameData, characters: string[]): string {
@@ -16,10 +15,10 @@ export function MapPanel({
 }: {
   game: GameData;
   view: View;
-  assets: AssetResolver;
+  assets: GameAssets;
   onGo(location: string): void;
 }) {
-  const image = game.map.image ? assets.background(game.map.image) : undefined;
+  const image = game.map.image ? assets.map(game.map.image) : undefined;
   const withPoints = image && view.locations.every((l) => l.point);
   if (withPoints) {
     return (
@@ -81,7 +80,7 @@ export function PlacePanel({
 }: {
   game: GameData;
   view: View;
-  assets: AssetResolver;
+  assets: GameAssets;
   onActivity(activity: Activity): void;
   onSleep(): void;
   onLeave(): void;
@@ -142,10 +141,12 @@ export function PlacePanel({
 export function BagPanel({
   game,
   view,
+  assets,
   onItem,
 }: {
   game: GameData;
   view: View;
+  assets: GameAssets;
   onItem(item: string): void;
 }) {
   const items = Object.entries(view.state.items).filter(([, count]) => count > 0);
@@ -155,9 +156,11 @@ export function BagPanel({
       {items.map(([key, count]) => {
         const item = game.items[key];
         const usable = item?.kind === "gift" || item?.kind === "consumable";
+        const icon = item?.icon ? assets.icon(item.icon) : undefined;
         return (
           <li key={key}>
             <button type="button" className="gu-row" disabled={!usable} onClick={() => onItem(key)}>
+              {icon && <img className="gu-icon" src={icon} alt="" />}
               <strong>
                 {item?.name ?? key}
                 {count > 1 ? ` ×${count}` : ""}

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 
 import {
   api,
+  type AssetList,
   problems,
   readFolder,
   StudioError,
@@ -412,6 +413,8 @@ function Title({ slug, member }: { slug: string; member: Member }) {
         </div>
       )}
 
+      <Assets slug={slug} editor={editor} />
+
       <h2>Версии</h2>
       {title.builds.length === 0 ? (
         <p className="muted">Сборок ещё нет.</p>
@@ -462,5 +465,124 @@ function Title({ slug, member }: { slug: string; member: Member }) {
         </table>
       )}
     </>
+  );
+}
+
+const AUDIO = /\.(wav|mp3|m4a|ogg|flac)$/i;
+const ASSET_FILE = /\.(png|jpe?g|webp|wav|mp3|m4a|ogg|flac)$/i;
+
+function Assets({ slug, editor }: { slug: string; editor: boolean }) {
+  const [list, setList] = useState<AssetList | null>(null);
+  const [progress, setProgress] = useState<string | null>(null);
+  const [errors, setErrors] = useState<string[]>([]);
+  const [warnings, setWarnings] = useState<string[]>([]);
+  const [reload, setReload] = useState(0);
+
+  useEffect(() => {
+    api.assets(slug).then(setList, () => setList({ assets: [], missing: [] }));
+  }, [slug, reload]);
+
+  // Файлы по одному: исходники тяжёлые, а так видно, на каком файле ошибка.
+  const upload = async (files: FileList | null) => {
+    if (!files) return;
+    const picked = Array.from(files).filter((file) => ASSET_FILE.test(file.name));
+    const failed: string[] = [];
+    const warned: string[] = [];
+    let added = 0;
+    for (const [index, file] of picked.entries()) {
+      setProgress(`Загружаем ${index + 1} из ${picked.length}: ${file.name}`);
+      try {
+        const result = await api.uploadAsset(slug, file);
+        if (!result.unchanged) added += 1;
+        warned.push(...result.warnings.map((w) => `${file.name}: ${w}`));
+      } catch (error) {
+        failed.push(...problems(error));
+      }
+    }
+    setProgress(`Готово: новых или обновлённых — ${added} из ${picked.length}`);
+    setErrors(failed);
+    setWarnings(warned);
+    setReload((n) => n + 1);
+  };
+
+  return (
+    <section className="card">
+      <h2>Ассеты</h2>
+      <p className="muted">
+        Имена файлов по docs/ASSETS.md: bg_gym.png, anna_smirk.png, item_rose.png, map_city_map.png,
+        cover_{slug}.png, music_calm.wav. Новая версия файла дойдёт до игроков со следующей сборкой
+        и публикацией.
+      </p>
+      {editor && (
+        <div className="actions">
+          <FolderInput disabled={progress?.startsWith("Загружаем")} onPick={upload}>
+            Загрузить папку
+          </FolderInput>
+          <label className="button secondary">
+            Загрузить файлы
+            <input
+              type="file"
+              hidden
+              multiple
+              accept="image/png,image/jpeg,image/webp,audio/*"
+              onChange={(e) => {
+                void upload(e.target.files);
+                e.target.value = "";
+              }}
+            />
+          </label>
+        </div>
+      )}
+      {progress && <p className={progress.startsWith("Готово") ? "ok" : "muted"}>{progress}</p>}
+      <Problems items={errors} />
+      <Problems items={warnings} kind="warning" />
+
+      {list && list.missing.length > 0 && (
+        <>
+          <h3>Не хватает — в игре будут заглушки</h3>
+          <ul className="missing">
+            {list.missing.map((m) => (
+              <li key={`${m.kind}:${m.key}`}>
+                <code>{m.file}</code>{" "}
+                <span className="muted">
+                  — {m.label} {m.key}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+
+      {list && list.assets.length > 0 && (
+        <div className="assets">
+          {list.assets.map((asset) => (
+            <figure key={`${asset.kind}:${asset.key}`} className={asset.used ? "" : "unused"}>
+              {asset.url && AUDIO.test(asset.filename) ? (
+                <audio controls preload="none" src={asset.url} />
+              ) : (
+                asset.url && <img src={asset.url} alt={asset.key} loading="lazy" />
+              )}
+              <figcaption>
+                <strong>{asset.key}</strong>
+                <span className="muted small">
+                  {asset.label}
+                  {asset.width ? ` · ${asset.width}×${asset.height}` : ""} ·{" "}
+                  {Math.round(asset.bytes / 1000)} КБ
+                  {asset.used ? "" : " · нигде не используется"}
+                </span>
+                {asset.warnings.map((w) => (
+                  <span key={w} className="small warning-text">
+                    ⚠ {w}
+                  </span>
+                ))}
+              </figcaption>
+            </figure>
+          ))}
+        </div>
+      )}
+      {list && list.assets.length === 0 && list.missing.length === 0 && (
+        <p className="muted">Ассетов пока нет.</p>
+      )}
+    </section>
   );
 }

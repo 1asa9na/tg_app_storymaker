@@ -10,6 +10,7 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
+from PIL import Image
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from storymaker_api.game.loader import read_directory
@@ -158,7 +159,7 @@ def test_publish_flow_reaches_players(client: TestClient) -> None:
     assert hidden_before
     assert published.json() == {"slug": key, "active_version": 1, "status": "published"}
     catalog = client.get("/api/titles", headers=player).json()
-    assert {"slug": key, "name": "Мини", "days": None, "save": None} in catalog
+    assert {"slug": key, "name": "Мини", "days": None, "cover": None, "save": None} in catalog
     state = client.get(f"/api/titles/{key}/state", headers=player).json()
     assert state["here"]["location"] == "home"
 
@@ -249,3 +250,77 @@ def test_seed_imports_repository_titles_once(client: TestClient) -> None:
     detail = client.get(f"/api/studio/titles/{key}").json()
     assert detail["status"] == "published"
     assert [b["version"] for b in detail["builds"]] == [1]
+
+
+def upload(client: TestClient, key: str, filename: str, data: bytes) -> Any:
+    return client.post(
+        f"/api/studio/titles/{key}/assets",
+        files={"file": (filename, data, "application/octet-stream")},
+        headers=HEADERS,
+    )
+
+
+def test_assets_reach_players_through_the_build(client: TestClient) -> None:
+    from tests.test_assets import png
+
+    studio(client)
+    key = slug()
+    files = {
+        "title.yaml": CONFIG,
+        "locations.yaml": LOCATIONS + "park: {name: Парк, background: park}\n",
+    }
+    post(client, f"/api/studio/titles/{key}/import", {"files": files})
+
+    uploaded = upload(client, key, "bg_home.png", png((1440, 2560)))
+    again = upload(client, key, "bg_home.png", png((1440, 2560)))
+    listing = client.get(f"/api/studio/titles/{key}/assets").json()
+    built = post(client, f"/api/studio/titles/{key}/builds", {}).json()
+    post(client, f"/api/studio/titles/{key}/publish", {"build_id": built["id"]})
+    player = {"Authorization": f"tma {make_init_data({'id': 43, 'first_name': 'И'})}"}
+    game = client.get(f"/api/titles/{key}/game", headers=player).json()
+
+    assert uploaded.json() == {
+        "kind": "background",
+        "key": "home",
+        "unchanged": False,
+        "warnings": [],
+    }
+    assert again.json()["unchanged"] is True
+    assert [(a["kind"], a["key"], a["used"]) for a in listing["assets"]] == [
+        ("background", "home", True)
+    ]
+    assert listing["missing"] == [
+        {"kind": "background", "label": "фон", "key": "park", "file": "bg_park.png"}
+    ]
+    assert "нет ассета: фон park (bg_park.png) — будет заглушка" in built["warnings"]
+    url = game["assets"]["background"]["home"]["1080"]
+    assert url.startswith(f"/assets/t/{key}/")
+    served = client.get(url)
+    assert served.status_code == 200
+    assert Image.open(BytesIO(served.content)).size == (1080, 1920)
+
+
+def test_sprite_canvas_must_match_other_emotions(client: TestClient) -> None:
+    from tests.test_assets import png
+
+    studio(client)
+    key = slug()
+    post(client, f"/api/studio/titles/{key}/import", {"files": {"title.yaml": CONFIG}})
+
+    first = upload(client, key, "anna_neutral.png", png((1000, 2400), "RGBA"))
+    other = upload(client, key, "anna_happy.png", png((900, 2400), "RGBA"))
+
+    assert first.status_code == 200
+    assert other.status_code == 422
+    assert "на одном холсте" in other.json()["detail"]["errors"][0]
+
+
+def test_bad_asset_name_is_explained(client: TestClient) -> None:
+    studio(client)
+    key = slug()
+    post(client, f"/api/studio/titles/{key}/import", {"files": {"title.yaml": CONFIG}})
+
+    response = upload(client, key, "Gym.png", b"x")
+
+    assert response.status_code == 422
+    assert response.json()["detail"]["errors"][0].startswith("Gym.png: имя — латиница")

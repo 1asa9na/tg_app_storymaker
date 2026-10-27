@@ -4,25 +4,53 @@
 """
 
 from datetime import UTC, datetime
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, cast
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
+from fastapi import (
+    APIRouter,
+    Cookie,
+    Depends,
+    HTTPException,
+    Request,
+    Response,
+    UploadFile,
+    status,
+)
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from storymaker_api.assets import (
+    LABELS,
+    MAX_BYTES,
+    AssetError,
+    Kind,
+    Storage,
+    file_name,
+    referenced,
+)
 from storymaker_api.config import Settings, get_settings
 from storymaker_api.content import (
     create_build,
+    current_assets,
     export_zip,
     get_or_create_title,
     import_files,
     load_content,
     publish,
+    upload_asset,
 )
 from storymaker_api.db import get_session
 from storymaker_api.game.schema import Id
-from storymaker_api.models import Build, SceneSource, TitleDocument, TitleRow, User
+from storymaker_api.models import (
+    Asset,
+    AssetVersion,
+    Build,
+    SceneSource,
+    TitleDocument,
+    TitleRow,
+    User,
+)
 from storymaker_api.studio.auth import (
     COOKIE,
     SESSION_TTL,
@@ -308,3 +336,79 @@ async def title_status(
     row.status = body.status
     await session.commit()
     return {"slug": row.slug, "status": row.status}
+
+
+# ── Ассеты ──────────────────────────────────────────────────────────────
+
+
+def get_storage(request: Request) -> Storage:
+    return request.app.state.storage
+
+
+@router.post("/titles/{slug}/assets")
+async def upload(
+    slug: str,
+    file: UploadFile,
+    session: SessionDep,
+    member: EditorDep,
+    storage: Annotated[Storage, Depends(get_storage)],
+) -> dict[str, Any]:
+    """Один файл от художника. Вид и ключ — из имени: bg_gym.png, anna_smirk.png (ASSETS.md)."""
+    row = await _title(session, slug)
+    data = await file.read(MAX_BYTES + 1)
+    filename = file.filename or ""
+    try:
+        uploaded = await upload_asset(session, storage, row, filename, data, member.user.id)
+    except AssetError as error:
+        await session.rollback()
+        message = str(error) if str(error).startswith(filename) else f"{filename}: {error}"
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, {"errors": [message]}) from None
+    await session.commit()
+    return {
+        "kind": uploaded.asset.kind,
+        "key": uploaded.asset.key,
+        "unchanged": uploaded.unchanged,
+        "warnings": uploaded.version.warnings,
+    }
+
+
+@router.get("/titles/{slug}/assets")
+async def assets(slug: str, session: SessionDep, member: MemberDep) -> dict[str, Any]:
+    """Ассеты тайтла, каких не хватает данным и сценам и какие ни к чему не привязаны."""
+    del member
+    row = await _title(session, slug)
+    versions = await session.execute(
+        select(Asset.kind, Asset.key, AssetVersion)
+        .join(AssetVersion, AssetVersion.id == Asset.current_version_id)
+        .where(Asset.title_id == row.id)
+        .order_by(Asset.kind, Asset.key)
+    )
+    content = await load_content(session, row.id)
+    needed = referenced(content.sections, content.scenes)
+    present = {(kind, key) for kind, key, _ in await current_assets(session, row.id)}
+    items = []
+    for kind, key, version in versions:
+        preview = next(iter(version.variants.values()), None)
+        items.append(
+            {
+                "kind": kind,
+                "label": LABELS[cast(Kind, kind)],
+                "key": key,
+                "filename": version.filename,
+                "width": version.width,
+                "height": version.height,
+                "bytes": version.bytes,
+                "warnings": version.warnings,
+                "url": f"/assets/{preview}" if preview else None,
+                "uploaded_at": version.created_at,
+                # Обложка и иконки достижений пока ни с чем не связаны в данных — не «лишние».
+                "used": (kind, key) in needed or kind in ("cover", "achievement", "avatar"),
+            }
+        )
+    return {
+        "assets": items,
+        "missing": [
+            {"kind": kind, "label": LABELS[kind], "key": key, "file": file_name(kind, key)}
+            for kind, key in sorted(needed - present)
+        ],
+    }

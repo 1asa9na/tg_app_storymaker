@@ -236,7 +236,12 @@ export function GameScreen({
           />
         )}
         {current === "bag" && (
-          <BagPanel game={game} view={view} onItem={(item) => setSheet({ kind: "item", item })} />
+          <BagPanel
+            game={game}
+            view={view}
+            assets={resolver}
+            onItem={(item) => setSheet({ kind: "item", item })}
+          />
         )}
         {current === "journal" && <JournalPanel game={game} view={view} />}
         {current === "people" && <PeoplePanel game={game} view={view} />}

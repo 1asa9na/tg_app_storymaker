@@ -30,6 +30,23 @@ export interface GameData {
   >;
   quests: Record<string, { name: string; stages: { id: string; journal: string }[] }>;
   achievements: Record<string, { name: string; description: string }>;
+  /** Ассеты сборки: вид → ключ → адреса вариантов. Чего нет — рисуется заглушка. */
+  assets: AssetManifest;
+}
+
+/** Размер варианта → адрес: фон {"1080", "720"}, спрайт {"1800", "1200"}, иконка {"256"}. */
+export type Variants = Record<string, string>;
+
+export interface AssetManifest {
+  background?: Record<string, Variants>;
+  map?: Record<string, Variants>;
+  sprite?: Record<string, Record<string, Variants>>;
+  icon?: Record<string, Variants>;
+  achievement?: Record<string, Variants>;
+  avatar?: Record<string, Variants>;
+  cover?: Record<string, Variants>;
+  music?: Record<string, string>;
+  sfx?: Record<string, string>;
 }
 
 export interface Account {

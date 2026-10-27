@@ -182,3 +182,57 @@ button:disabled,
   font-size: 12px;
   cursor: help;
 }
+
+.card h3 {
+  margin: 8px 0 0;
+  font-size: 15px;
+}
+
+.missing {
+  margin: 0;
+  padding-left: 18px;
+  line-height: 1.7;
+}
+
+.assets {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.assets figure {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 8px;
+  border-radius: 10px;
+  background: #f1edf8;
+}
+
+.assets figure.unused {
+  opacity: 0.6;
+}
+
+.assets img {
+  width: 100%;
+  aspect-ratio: 9 / 16;
+  object-fit: contain;
+  border-radius: 6px;
+  background: repeating-conic-gradient(#e2dcec 0% 25%, #fff 0% 50%) 50% / 16px 16px;
+}
+
+.assets audio {
+  width: 100%;
+}
+
+.assets figcaption {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  word-break: break-word;
+}
+
+.warning-text {
+  color: #8a5a00;
+}

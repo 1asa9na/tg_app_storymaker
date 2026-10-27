@@ -23,10 +23,12 @@ class Catalog:
         if build_id in self._builds:
             self._builds.move_to_end(build_id)
             return self._builds[build_id]
-        data = await session.scalar(select(Build.data).where(Build.id == build_id))
-        if data is None:
+        row = (
+            await session.execute(select(Build.data, Build.manifest).where(Build.id == build_id))
+        ).first()
+        if row is None:
             return None
-        build = TitleBuild.from_json(data)
+        build = TitleBuild.from_json(row.data, row.manifest)
         self._builds[build_id] = build
         while len(self._builds) > CACHE_SIZE:
             self._builds.popitem(last=False)

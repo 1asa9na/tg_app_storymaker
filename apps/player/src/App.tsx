@@ -106,6 +106,13 @@ function Platform({ initData }: { initData: string }) {
             <button
               type="button"
               className="title-card"
+              style={
+                title.cover
+                  ? {
+                      backgroundImage: `linear-gradient(transparent 40%, rgb(21 18 28 / 0.9)), url("${title.cover.preview ?? title.cover.full}")`,
+                    }
+                  : undefined
+              }
               onClick={() => {
                 haptic("tap");
                 setScreen({ kind: "game", slug: title.slug });

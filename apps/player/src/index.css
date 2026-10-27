@@ -130,6 +130,8 @@ button.secondary {
   padding: 18px;
   border-radius: 16px;
   background: linear-gradient(135deg, #3b2a63, #1f1830);
+  background-size: cover;
+  background-position: center 30%;
   text-align: left;
 }
 

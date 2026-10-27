@@ -169,6 +169,7 @@ async def catalog(titles: CatalogDep, user: UserDep, session: SessionDep) -> lis
                 "slug": slug,
                 "name": build.title.config.name,
                 "days": build.title.config.time.days,
+                "cover": build.manifest.get("cover", {}).get(slug),
                 "save": (
                     {"day": state["day"], "finished": state.get("finished", False)}
                     if state
@@ -231,6 +232,8 @@ async def game_data(game: GameDep) -> dict[str, Any]:
         "achievements": {
             key: achievement.model_dump() for key, achievement in title.achievements.items()
         },
+        # Адреса картинок и звуков; чего здесь нет — плеер рисует заглушкой.
+        "assets": game.build.manifest,
     }
 
 

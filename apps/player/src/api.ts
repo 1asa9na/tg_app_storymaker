@@ -21,6 +21,8 @@ export interface CatalogEntry {
   slug: string;
   name: string;
   days: number | null;
+  /** Обложка: {full, preview}; null — рисуем градиент. */
+  cover: Record<string, string> | null;
   save: { day: number; finished: boolean } | null;
 }
 
