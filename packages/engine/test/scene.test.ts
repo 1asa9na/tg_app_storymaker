@@ -108,9 +108,28 @@ describe("compileScene", () => {
     expect(result.scene).not.toBeNull();
     expect(result.diagnostics).toEqual([expect.objectContaining({ severity: "warning", line: 1 })]);
   });
+
+  it("drops the Inky stub include and keeps line numbers", () => {
+    const result = compileScene('INCLUDE _inky.ink\n# bg: nowhere\n{ flag("x"): Да. }\n', REGISTRY);
+
+    expect(result.diagnostics).toEqual([
+      { severity: "error", line: 2, message: "Фона «nowhere» нет в тайтле" },
+    ]);
+  });
 });
 
 describe("SceneRunner", () => {
+  it("calls the game state instead of fallback functions written for Inky", () => {
+    const source = `{ flag("lamp_lit"): Горит. | Темно. }
+-> END
+=== function flag(name) ===
+~ return true
+`;
+    const runner = new SceneRunner(compiled(source), { flags: { lamp_lit: false } });
+
+    expect(runner.next()).toMatchObject({ type: "line", text: "Темно." });
+  });
+
   it("streams lines with speakers and commands, then choices", () => {
     const runner = new SceneRunner(compiled(), {
       items: { water_bottle: 1 },

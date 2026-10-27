@@ -114,6 +114,8 @@ def load_title(directory: Path, compiler: Compiler = compile_scenes) -> LoadResu
 
     sources: dict[str, str] = {}
     for path in sorted((directory / "scenes").glob("*.ink")):
+        if path.name.startswith("_"):
+            continue  # не сцена: например, _inky.ink с заглушками для превью в Inky
         if KEY.match(path.stem):
             sources[path.stem] = path.read_text(encoding="utf-8")
         else:

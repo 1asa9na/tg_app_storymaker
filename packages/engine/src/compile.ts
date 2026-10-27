@@ -17,6 +17,8 @@ const HEADER = [
 ].join("\n");
 const HEADER_LINES = HEADER.split("\n").length;
 const OWN_EXTERNAL = new RegExp(`^\\s*EXTERNAL\\s+(${EXTERNAL_FUNCTIONS.join("|")})\\s*\\(`);
+/** Заглушки функций для превью в Inky (`content/titles/<тайтл>/scenes/_inky.ink`): в игре их заменяет движок. */
+const INKY_STUB = /^\s*INCLUDE\s+(?:.*\/)?_inky\.ink\s*$/;
 const SPEAKER = /^([a-z][a-z0-9_]*):\s/;
 /** Реплика протагониста: его имя задаёт игрок, в реестре персонажей его нет. */
 export const PLAYER_SPEAKER = "me";
@@ -171,10 +173,14 @@ function checkEffect(effect: Effect, registry: Registry): string | null {
 
 export function compileScene(source: string, registry: Registry = {}): CompileResult {
   const diagnostics: Diagnostic[] = [];
-  // Свои объявления EXTERNAL сценаристу не нужны; заменяем пустой строкой, чтобы не сбить нумерацию.
+  // Свои объявления EXTERNAL сценаристу не нужны, а заглушки для Inky подставляет движок;
+  // такие строки заменяем пустыми, чтобы не сбить нумерацию.
   const body = source
     .split("\n")
     .map((line, index) => {
+      if (INKY_STUB.test(line)) {
+        return "";
+      }
       if (!OWN_EXTERNAL.test(line)) {
         return line;
       }

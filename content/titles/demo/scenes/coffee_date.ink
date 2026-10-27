@@ -1,3 +1,4 @@
+INCLUDE _inky.ink
 # bg: cafe
 # show: anna happy center
 anna: Признаюсь, я думала, ты не позовёшь.

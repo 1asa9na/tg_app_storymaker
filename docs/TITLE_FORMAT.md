@@ -16,6 +16,7 @@ content/titles/<ключ-тайтла>/
   events.yaml        события: когда и какая сцена запускается
   achievements.yaml  достижения
   scenes/*.ink       сцены (формат — docs/SCENE_FORMAT.md)
+  scenes/_inky.ink   заглушки функций игры для превью в Inky, не сцена
 ```
 
 Обязателен только `title.yaml`, остальные файлы — по мере надобности.
