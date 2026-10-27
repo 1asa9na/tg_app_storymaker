@@ -8,6 +8,6 @@ export default defineConfig({
     assetsDir: "static",
   },
   server: {
-    proxy: { "/api": "http://localhost:8000" },
+    proxy: { "/api": "http://localhost:8000", "/assets": "http://localhost:8000" },
   },
 });

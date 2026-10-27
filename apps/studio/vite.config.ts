@@ -6,6 +6,6 @@ export default defineConfig({
   build: { assetsDir: "static" },
   server: {
     port: 5174,
-    proxy: { "/api": "http://localhost:8000" },
+    proxy: { "/api": "http://localhost:8000", "/assets": "http://localhost:8000" },
   },
 });

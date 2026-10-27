@@ -26,7 +26,7 @@ LOGIN_TTL = timedelta(minutes=10)
 SESSION_TTL = timedelta(days=30)
 
 
-def _hash(token: str) -> str:
+def token_hash(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
@@ -37,7 +37,9 @@ async def staff_role(session: AsyncSession, user_id: int) -> Role | None:
 
 async def create_login_token(session: AsyncSession, user_id: int, now: datetime) -> str:
     token = secrets.token_urlsafe(32)
-    session.add(LoginToken(token_hash=_hash(token), user_id=user_id, expires_at=now + LOGIN_TTL))
+    session.add(
+        LoginToken(token_hash=token_hash(token), user_id=user_id, expires_at=now + LOGIN_TTL)
+    )
     await session.flush()
     return token
 
@@ -47,7 +49,7 @@ async def exchange_login_token(
 ) -> tuple[str, User] | None:
     """Одноразовый токен → новая сессия. None — токен неверный, использован или истёк."""
     login = await session.scalar(
-        select(LoginToken).where(LoginToken.token_hash == _hash(token)).with_for_update()
+        select(LoginToken).where(LoginToken.token_hash == token_hash(token)).with_for_update()
     )
     if login is None or login.used_at is not None or login.expires_at <= now:
         return None
@@ -59,7 +61,7 @@ async def exchange_login_token(
     session_token = secrets.token_urlsafe(32)
     session.add(
         StudioSession(
-            token_hash=_hash(session_token), user_id=user.id, expires_at=now + SESSION_TTL
+            token_hash=token_hash(session_token), user_id=user.id, expires_at=now + SESSION_TTL
         )
     )
     await session.flush()
@@ -67,7 +69,7 @@ async def exchange_login_token(
 
 
 async def end_session(session: AsyncSession, token: str) -> None:
-    found = await session.get(StudioSession, _hash(token))
+    found = await session.get(StudioSession, token_hash(token))
     if found is not None:
         await session.delete(found)
 
@@ -92,7 +94,7 @@ async def current_member(
         raise HTTPException(status.HTTP_403_FORBIDDEN, "missing X-Studio header")
     if not token:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "not logged in")
-    found = await session.get(StudioSession, _hash(token))
+    found = await session.get(StudioSession, token_hash(token))
     if found is None or found.expires_at <= datetime.now(UTC):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "session expired")
     role = await staff_role(session, found.user_id)

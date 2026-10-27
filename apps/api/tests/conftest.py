@@ -3,6 +3,7 @@ import hashlib
 import hmac
 import json
 import os
+import tempfile
 import time
 from collections.abc import Awaitable, Callable, Iterator
 from pathlib import Path
@@ -14,6 +15,8 @@ os.environ["BOT_TOKEN"] = "123456:TEST-TOKEN"
 os.environ["BOT_WEBHOOK_SECRET"] = "test-secret"
 os.environ["PUBLIC_URL"] = ""
 os.environ["SENTRY_DSN"] = ""
+# Варианты ассетов — во временную папку (на сервере это /srv/assets).
+os.environ["ASSETS_DIR"] = tempfile.mkdtemp(prefix="storymaker-assets-")
 os.environ.setdefault(
     "DATABASE_URL", "postgresql+asyncpg://storymaker:storymaker@localhost:5432/storymaker_test"
 )

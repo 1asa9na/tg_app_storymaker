@@ -34,6 +34,32 @@ export interface TitleDetail {
   builds: BuildInfo[];
 }
 
+export interface AssetInfo {
+  kind: string;
+  label: string;
+  key: string;
+  filename: string;
+  width: number | null;
+  height: number | null;
+  bytes: number;
+  warnings: string[];
+  url: string | null;
+  uploaded_at: string;
+  used: boolean;
+}
+
+export interface AssetList {
+  assets: AssetInfo[];
+  missing: { kind: string; label: string; key: string; file: string }[];
+}
+
+export interface UploadResult {
+  kind: string;
+  key: string;
+  unchanged: boolean;
+  warnings: string[];
+}
+
 /** Ошибка API: статус и detail как есть (строка или объект с errors/lost). */
 export class StudioError extends Error {
   readonly status: number;
@@ -44,6 +70,16 @@ export class StudioError extends Error {
     this.status = status;
     this.detail = detail;
   }
+}
+
+async function failure(response: Response): Promise<StudioError> {
+  let detail: unknown = null;
+  try {
+    detail = ((await response.json()) as { detail?: unknown }).detail;
+  } catch {
+    // тело не JSON — хватит статуса
+  }
+  return new StudioError(response.status, detail);
 }
 
 async function request<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<T> {
@@ -57,16 +93,22 @@ async function request<T>(method: "GET" | "POST", path: string, body?: unknown):
           { "Content-Type": "application/json", "X-Studio": "1" },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-  if (!response.ok) {
-    let detail: unknown = null;
-    try {
-      detail = ((await response.json()) as { detail?: unknown }).detail;
-    } catch {
-      // тело не JSON — хватит статуса
-    }
-    throw new StudioError(response.status, detail);
-  }
+  if (!response.ok) throw await failure(response);
   return (await response.json()) as T;
+}
+
+/** Один файл ассета: multipart, вид и ключ сервер берёт из имени. */
+async function uploadAsset(slug: string, file: File): Promise<UploadResult> {
+  const form = new FormData();
+  form.append("file", file, file.name);
+  const response = await fetch(`/api/studio/titles/${slug}/assets`, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "X-Studio": "1" },
+    body: form,
+  });
+  if (!response.ok) throw await failure(response);
+  return (await response.json()) as UploadResult;
 }
 
 export const api = {
@@ -87,6 +129,8 @@ export const api = {
   setStatus: (slug: string, status: "published" | "hidden") =>
     request<{ status: string }>("POST", `/titles/${slug}/status`, { status }),
   exportUrl: (slug: string) => `/api/studio/titles/${slug}/export`,
+  assets: (slug: string) => request<AssetList>("GET", `/titles/${slug}/assets`),
+  uploadAsset,
 };
 
 /** Файлы из выбранной папки тайтла: путь без имени самой папки → текст. */

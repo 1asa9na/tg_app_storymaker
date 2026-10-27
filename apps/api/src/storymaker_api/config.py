@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     # Тайтлы из репозитория (content/titles): при деплое импортируются в базу те, которых там
     # ещё нет (python -m storymaker_api.studio seed). В образе — /app/content/titles.
     content_dir: Path | None = None
+    # Варианты ассетов для игроков: на сервере — volume /srv/assets, его раздаёт Caddy по /assets.
+    # Локально API раздаёт их сам (APP_ENV=local).
+    assets_dir: Path = Path("/srv/assets")
     # Адрес студии (https://studio.<домен>): бот присылает туда ссылки входа.
     studio_url: str | None = None
 

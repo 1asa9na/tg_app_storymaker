@@ -55,7 +55,7 @@ def test_catalog_lists_titles_with_save(api: TestClient) -> None:
     def entry() -> dict[str, Any]:
         return next(t for t in api.get("/api/titles").json() if t["slug"] == "test")
 
-    assert entry() == {"slug": "test", "name": "Тест", "days": 3, "save": None}
+    assert entry() == {"slug": "test", "name": "Тест", "days": 3, "cover": None, "save": None}
     api.get("/api/titles/test/state")
     assert entry()["save"] == {"day": 1, "finished": False}
 

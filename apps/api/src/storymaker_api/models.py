@@ -97,8 +97,60 @@ class Build(Base):
     #: Title целиком (dump_title), сцены уже скомпилированы.
     data: Mapped[str] = mapped_column(Text)
     warnings: Mapped[list[str]] = mapped_column(JSONB, server_default="[]")
+    #: Ассеты на момент сборки: вид → ключ → адреса вариантов (assets.build_manifest).
+    manifest: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default="{}")
     notes: Mapped[str] = mapped_column(Text, server_default="")
     created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Asset(Base):
+    """Ассет тайтла по ключу: фон gym, спрайт anna_smirk, музыка calm. Файлы — в версиях."""
+
+    __tablename__ = "assets"
+    __table_args__ = (UniqueConstraint("title_id", "kind", "key"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    title_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("titles.id"))
+    kind: Mapped[str] = mapped_column(Text)
+    key: Mapped[str] = mapped_column(Text)
+    current_version_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        ForeignKey("asset_versions.id", use_alter=True, name="assets_current_version_id_fkey"),
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class AssetVersion(Base):
+    """Загруженный исходник и его варианты. Не меняется и не удаляется."""
+
+    __tablename__ = "asset_versions"
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    asset_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("assets.id"))
+    #: Ключ исходника в бакете originals.
+    original_key: Mapped[str] = mapped_column(Text)
+    hash: Mapped[str] = mapped_column(Text)
+    filename: Mapped[str] = mapped_column(Text)
+    width: Mapped[int | None] = mapped_column(Integer)
+    height: Mapped[int | None] = mapped_column(Integer)
+    bytes: Mapped[int] = mapped_column(Integer)
+    #: Имя варианта → путь внутри /assets: {"1080": "t/demo/3f/3fa9….1080.webp", …}.
+    variants: Mapped[dict[str, str]] = mapped_column(JSONB)
+    warnings: Mapped[list[str]] = mapped_column(JSONB, server_default="[]")
+    uploaded_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class PreviewToken(Base):
+    """Ссылка на песочницу сборки для телефона: открывает её в Mini App у сотрудника."""
+
+    __tablename__ = "preview_tokens"
+
+    token_hash: Mapped[str] = mapped_column(Text, primary_key=True)
+    build_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("builds.id"))
+    created_by: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

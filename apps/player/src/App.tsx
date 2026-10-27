@@ -8,7 +8,11 @@ const GameScreen = lazy(() =>
   import("@storymaker/game-ui").then((m) => ({ default: m.GameScreen })),
 );
 
-type Screen = { kind: "catalog" } | { kind: "profile" } | { kind: "game"; slug: string };
+type Screen =
+  | { kind: "catalog" }
+  | { kind: "profile" }
+  | { kind: "game"; slug: string }
+  | { kind: "preview"; token: string };
 
 type Load =
   | { kind: "loading" }
@@ -22,9 +26,16 @@ function errorMessage(error: unknown): string {
   return "Не удалось связаться с сервером. Попробуйте позже.";
 }
 
-/** Диплинк t.me/<бот>/<app>?startapp=title_<slug> сразу открывает тайтл. */
+/**
+ * Куда открыться сразу:
+ * - диплинк startapp=title_<slug> — тайтл;
+ * - кнопка превью из бота (?preview=<токен>) или startapp=preview_<токен> — песочница сборки.
+ */
 function initialScreen(): Screen {
+  const preview = new URLSearchParams(window.location.search).get("preview");
+  if (preview) return { kind: "preview", token: preview };
   const start = readStartParam();
+  if (start?.startsWith("preview_")) return { kind: "preview", token: start.slice(8) };
   return start?.startsWith("title_") ? { kind: "game", slug: start.slice(6) } : { kind: "catalog" };
 }
 
@@ -45,7 +56,11 @@ function Platform({ initData }: { initData: string }) {
   const [screen, setScreen] = useState<Screen>(initialScreen);
   const [reload, setReload] = useState(0);
   const slug = screen.kind === "game" ? screen.slug : null;
-  const client = useMemo(() => (slug ? api.title(slug) : null), [api, slug]);
+  const previewToken = screen.kind === "preview" ? screen.token : null;
+  const client = useMemo(() => {
+    if (previewToken) return api.preview(previewToken);
+    return slug ? api.title(slug) : null;
+  }, [api, slug, previewToken]);
 
   useEffect(() => {
     let cancelled = false;
@@ -78,6 +93,7 @@ function Platform({ initData }: { initData: string }) {
           haptic={haptic}
           onBackHandler={setBackButton}
           onExit={toCatalog}
+          badge={screen.kind === "preview" ? "Превью" : undefined}
         />
       </Suspense>
     );
@@ -106,6 +122,13 @@ function Platform({ initData }: { initData: string }) {
             <button
               type="button"
               className="title-card"
+              style={
+                title.cover
+                  ? {
+                      backgroundImage: `linear-gradient(transparent 40%, rgb(21 18 28 / 0.9)), url("${title.cover.preview ?? title.cover.full}")`,
+                    }
+                  : undefined
+              }
               onClick={() => {
                 haptic("tap");
                 setScreen({ kind: "game", slug: title.slug });

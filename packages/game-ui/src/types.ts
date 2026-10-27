@@ -30,6 +30,23 @@ export interface GameData {
   >;
   quests: Record<string, { name: string; stages: { id: string; journal: string }[] }>;
   achievements: Record<string, { name: string; description: string }>;
+  /** Ассеты сборки: вид → ключ → адреса вариантов. Чего нет — рисуется заглушка. */
+  assets: AssetManifest;
+}
+
+/** Размер варианта → адрес: фон {"1080", "720"}, спрайт {"1800", "1200"}, иконка {"256"}. */
+export type Variants = Record<string, string>;
+
+export interface AssetManifest {
+  background?: Record<string, Variants>;
+  map?: Record<string, Variants>;
+  sprite?: Record<string, Record<string, Variants>>;
+  icon?: Record<string, Variants>;
+  achievement?: Record<string, Variants>;
+  avatar?: Record<string, Variants>;
+  cover?: Record<string, Variants>;
+  music?: Record<string, string>;
+  sfx?: Record<string, string>;
 }
 
 export interface Account {
@@ -41,6 +58,7 @@ export interface Account {
 }
 
 export interface SaveState {
+  title: string;
   day: number;
   slot: number;
   location: string | null;
@@ -50,6 +68,10 @@ export interface SaveState {
   flags: Record<string, boolean>;
   quests: Record<string, { status: "active" | "done"; stage: number }>;
   gifts_today: Record<string, number>;
+  resources: Record<string, { value: number; anchor: string | null }>;
+  events_seen: string[];
+  achievements: string[];
+  pending_scenes: { scene: string; event: string }[];
   global_level: number;
   finished: boolean;
 }
