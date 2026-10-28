@@ -67,8 +67,13 @@ function pick(variants: Variants | undefined, large: string, small: string): str
   return (pixels > 600 ? variants[large] : variants[small]) ?? Object.values(variants)[0];
 }
 
+/** Что нужно ассетам: манифест, названия мест для заглушек фонов и цвета персонажей. */
+export type AssetSource = Pick<GameData, "assets" | "locations"> & {
+  characters: Record<string, { color: string | null }>;
+};
+
 /** Ассеты тайтла: из манифеста сборки, чего нет — заглушки. `override` — для песочницы. */
-export function withPlaceholders(game: GameData, override?: Partial<AssetResolver>): GameAssets {
+export function withPlaceholders(game: AssetSource, override?: Partial<AssetResolver>): GameAssets {
   const manifest = game.assets ?? {};
   const names = new Map(
     Object.values(game.locations).map((location) => [location.background, location.name]),

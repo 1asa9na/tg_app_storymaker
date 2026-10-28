@@ -557,3 +557,78 @@ def test_writer_cannot_edit_documents(client: TestClient) -> None:
     )
 
     assert response.status_code == 403
+
+
+SCENE_FILES = {
+    "title.yaml": CONFIG.replace("{location: home}", "{location: home, flags: [tutorial]}")
+    + "stats: {charm: {name: Обаяние}}\n",
+    "locations.yaml": LOCATIONS,
+    "characters.yaml": "anna: {name: Анна, color: '#f19bb8', emotions: [neutral, happy]}\n",
+    "items.yaml": "rose: {name: Роза, kind: gift}\n",
+    "events.yaml": "hi: {trigger: day_start, scene: hello, when: {flag.met_anna: true}}\n",
+    "scenes/hello.ink": "# bg: home\n# music: calm\nanna: Привет.\n# effect: flag waved\n"
+    '{ flag("seen_ending"): Снова ты. }\n-> END\n',
+}
+
+
+def test_scene_editor_gets_the_build_registry_and_hints(client: TestClient) -> None:
+    key = slug()
+    studio(client)
+    post(client, f"/api/studio/titles/{key}/import", {"files": SCENE_FILES})
+    studio(client, "writer")
+
+    context = client.get(f"/api/studio/titles/{key}/scenes").json()
+
+    assert [scene["key"] for scene in context["scenes"]] == ["hello"]
+    assert context["registry"] == {
+        "characters": {"anna": ["neutral", "happy"]},
+        "items": ["rose"],
+        "stats": ["charm"],
+        "quests": [],
+        "achievements": [],
+    }
+    assert context["characters"]["anna"] == {
+        "name": "Анна",
+        "color": "#f19bb8",
+        "emotions": ["neutral", "happy"],
+    }
+    assert context["items"] == {"rose": "Роза"}
+    assert context["flags"] == ["met_anna", "seen_ending", "tutorial", "waved"]
+    assert context["backgrounds"] == ["home"]
+    assert context["music"] == ["calm"]
+    assert context["locations"]["home"] == {"name": "Дом", "background": "home"}
+
+
+def test_scenes_are_saved_without_losing_someone_elses_edit(client: TestClient) -> None:
+    studio(client)
+    key = slug()
+    post(client, f"/api/studio/titles/{key}/import", {"files": {"title.yaml": CONFIG}})
+    studio(client, "writer")
+    url = f"/api/studio/titles/{key}/scenes/intro"
+
+    created = client.put(url, json={"source": "Привет.\n-> END\n"}, headers=HEADERS)
+    twice = client.put(url, json={"source": "Другое.\n"}, headers=HEADERS)
+    opened = client.get(url).json()
+    saved = client.put(
+        url, json={"source": "Привет!\n-> END\n", "base": opened["updated_at"]}, headers=HEADERS
+    )
+    stale = client.put(
+        url, json={"source": "Затираю.\n", "base": opened["updated_at"]}, headers=HEADERS
+    )
+
+    assert created.status_code == 200, created.json()
+    assert any("intro" in w for w in created.json()["problems"]["warnings"])
+    assert twice.status_code == 409
+    assert twice.json()["detail"]["exists"] is True
+    assert saved.status_code == 200, saved.json()
+    assert stale.status_code == 409
+    assert stale.json()["detail"]["updated_by"] == "Сотрудник"
+    assert client.get(url).json()["source"] == "Привет!\n-> END\n"
+
+    bad = client.put(
+        f"/api/studio/titles/{key}/scenes/Intro", json={"source": "x"}, headers=HEADERS
+    )
+    assert bad.status_code == 422
+    assert client.delete(url, headers=HEADERS).status_code == 200
+    assert client.get(url).status_code == 404
+    assert client.delete(url, headers=HEADERS).status_code == 404

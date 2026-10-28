@@ -4,6 +4,7 @@ export {
   placeholderBackground,
   placeholderSprite,
   withPlaceholders,
+  type AssetSource,
   type GameAssets,
 } from "./placeholders.ts";
 export * from "./types.ts";

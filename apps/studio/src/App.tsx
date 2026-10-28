@@ -10,17 +10,23 @@ import {
   type TitleDetail,
   type TitleSummary,
 } from "./api";
+import { navigate } from "./navigation";
 
 type Route =
   | { page: "titles" }
   | { page: "title"; slug: string }
   | { page: "sandbox"; slug: string; buildId: number }
   | { page: "data"; slug: string }
+  | { page: "scenes"; slug: string; scene: string | null }
   | { page: "login" };
 
 // Песочница тянет экран игры с рантаймом ink — грузится, только когда её открыли.
 const Sandbox = lazy(() => import("./Sandbox").then((m) => ({ default: m.Sandbox })));
 const DataEditor = lazy(() => import("./DataEditor").then((m) => ({ default: m.DataEditor })));
+// Monaco тяжёлый (несколько мегабайт) — только на странице сцен.
+const ScenesPage = lazy(() =>
+  import("./scenes/ScenesPage").then((m) => ({ default: m.ScenesPage })),
+);
 
 function parseRoute(): Route {
   const path = window.location.pathname;
@@ -29,13 +35,10 @@ function parseRoute(): Route {
   if (sandbox) return { page: "sandbox", slug: sandbox[1]!, buildId: Number(sandbox[2]) };
   const data = /^\/t\/([a-z][a-z0-9_]*)\/data$/.exec(path);
   if (data) return { page: "data", slug: data[1]! };
+  const scenes = /^\/t\/([a-z][a-z0-9_]*)\/scenes(?:\/([a-z][a-z0-9_]*))?$/.exec(path);
+  if (scenes) return { page: "scenes", slug: scenes[1]!, scene: scenes[2] ?? null };
   const match = /^\/t\/([a-z][a-z0-9_]*)$/.exec(path);
   return match ? { page: "title", slug: match[1]! } : { page: "titles" };
-}
-
-function navigate(path: string) {
-  window.history.pushState(null, "", path);
-  window.dispatchEvent(new PopStateEvent("popstate"));
 }
 
 const STATUS: Record<TitleSummary["status"], string> = {
@@ -97,6 +100,26 @@ export function App() {
           </p>
           <Suspense fallback={<p className="muted">Загружаем…</p>}>
             <DataEditor slug={route.slug} editor={canEdit(member)} />
+          </Suspense>
+        </>
+      )}
+      {route.page === "scenes" && (
+        <>
+          <p className="muted">
+            <a
+              href={`/t/${route.slug}`}
+              onClick={(e) => (e.preventDefault(), navigate(`/t/${route.slug}`))}
+            >
+              ← к тайтлу
+            </a>{" "}
+            · сцены
+          </p>
+          <Suspense fallback={<p className="muted">Загружаем редактор…</p>}>
+            <ScenesPage
+              slug={route.slug}
+              sceneKey={route.scene}
+              onOpen={(key) => navigate(`/t/${route.slug}/scenes${key ? `/${key}` : ""}`)}
+            />
           </Suspense>
         </>
       )}
@@ -379,6 +402,13 @@ function Title({ slug, member }: { slug: string; member: Member }) {
           onClick={(e) => (e.preventDefault(), navigate(`/t/${slug}/data`))}
         >
           Данные
+        </a>
+        <a
+          className="button"
+          href={`/t/${slug}/scenes`}
+          onClick={(e) => (e.preventDefault(), navigate(`/t/${slug}/scenes`))}
+        >
+          Сцены
         </a>
         <a className="button secondary" href={api.exportUrl(slug)}>
           Скачать архивом

@@ -45,6 +45,7 @@ from storymaker_api.content import (
     upload_asset,
 )
 from storymaker_api.db import get_session
+from storymaker_api.game.loader import KEY
 from storymaker_api.game.scenes import EngineUnavailableError
 from storymaker_api.game.schema import Id
 from storymaker_api.game.simulator import Settings as SimulationSettings
@@ -59,6 +60,7 @@ from storymaker_api.models import (
     User,
 )
 from storymaker_api.routes.game import game_routes
+from storymaker_api.studio import scenes
 from storymaker_api.studio.auth import (
     COOKIE,
     SESSION_TTL,
@@ -76,6 +78,7 @@ router = APIRouter(prefix="/api/studio")
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 MemberDep = Annotated[Member, Depends(current_member)]
 EditorDep = Annotated[Member, Depends(require("designer"))]
+WriterDep = Annotated[Member, Depends(require("writer", "designer"))]
 
 #: Предел для импорта: тайтл — это тексты, мегабайты здесь — ошибка.
 MAX_FILES = 300
@@ -599,5 +602,82 @@ async def remove_document(
     row = await _title(session, slug)
     if not await documents.delete_document(session, row, _kind(kind), key):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "document not found")
+    await session.commit()
+    return {"problems": await documents.problems(session, row)}
+
+
+# ── Сцены ───────────────────────────────────────────────────────────────
+
+
+@router.get("/titles/{slug}/scenes")
+async def title_scenes(slug: str, session: SessionDep, member: MemberDep) -> dict[str, Any]:
+    """Список сцен и ключи тайтла для редактора: реестр компилятора, подсказки, ассеты."""
+    del member
+    return await scenes.editor_context(session, await _title(session, slug))
+
+
+def _scene_key(key: str) -> str:
+    if not KEY.match(key):
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            {"errors": ["ключ сцены — латиница в нижнем регистре, цифры и _, с буквы"]},
+        )
+    return key
+
+
+@router.get("/titles/{slug}/scenes/{key}")
+async def get_scene(slug: str, key: str, session: SessionDep, member: MemberDep) -> dict[str, Any]:
+    del member
+    scene = await scenes.read_scene(session, await _title(session, slug), key)
+    if scene is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "scene not found")
+    return {"key": scene.key, "source": scene.source, "updated_at": scene.updated_at}
+
+
+class SceneRequest(BaseModel):
+    source: str = Field(max_length=scenes.MAX_SOURCE)
+    #: Время версии, которую правили; None — создать новую сцену.
+    base: datetime | None = None
+
+
+@router.put("/titles/{slug}/scenes/{key}")
+async def put_scene(
+    slug: str, key: str, body: SceneRequest, session: SessionDep, member: WriterDep
+) -> dict[str, Any]:
+    """Сохранить сцену. Ошибки в ней не мешают сохранению — их не пропустит сборка.
+
+    409, если сцену успели изменить после того, как её открыли: правка не затирает чужую.
+    """
+    row = await _title(session, slug)
+    try:
+        scene = await scenes.save_scene(
+            session, row, _scene_key(key), body.source, member.user.id, body.base
+        )
+    except scenes.SceneConflictError as conflict:
+        current = conflict.current
+        author = (
+            await session.get(User, current.updated_by) if current and current.updated_by else None
+        )
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {
+                "code": "conflict",
+                "exists": current is not None,
+                "updated_at": current.updated_at.isoformat() if current else None,
+                "updated_by": author.first_name if author else None,
+            },
+        ) from None
+    await session.commit()
+    return {"updated_at": scene.updated_at, "problems": await documents.problems(session, row)}
+
+
+@router.delete("/titles/{slug}/scenes/{key}")
+async def remove_scene(
+    slug: str, key: str, session: SessionDep, member: WriterDep
+) -> dict[str, Any]:
+    del member
+    row = await _title(session, slug)
+    if not await scenes.delete_scene(session, row, key):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "scene not found")
     await session.commit()
     return {"problems": await documents.problems(session, row)}

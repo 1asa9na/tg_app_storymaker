@@ -139,6 +139,32 @@ def parse_files(files: Files) -> Parsed:
     return parsed
 
 
+def _dict(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def scene_registry(sections: dict[str, Any]) -> dict[str, Any]:
+    """Ключи тайтла, которые компилятор сцен проверяет в тегах и репликах.
+
+    Строится по сырым разделам и терпит ошибки в них: редактор сцен в студии получает тот же
+    реестр, что и сборка, даже когда данные тайтла ещё не проходят проверку.
+    """
+    characters: dict[str, list[str]] = {}
+    for key, character in _dict(sections.get("characters")).items():
+        emotions = _dict(character).get("emotions")
+        emotions = [emotions] if isinstance(emotions, str) else emotions
+        if not isinstance(emotions, list):
+            emotions = []
+        characters[key] = [e for e in emotions if isinstance(e, str)]
+    return {
+        "characters": characters,
+        "items": list(_dict(sections.get("items"))),
+        "stats": list(_dict(_dict(sections.get("config")).get("stats"))),
+        "quests": list(_dict(sections.get("quests"))),
+        "achievements": list(_dict(sections.get("achievements"))),
+    }
+
+
 def load_title(directory: Path, compiler: Compiler = compile_scenes) -> LoadResult:
     if not (directory / "title.yaml").exists():
         return LoadResult(title=None, errors=[f"{directory}: нет title.yaml"])
@@ -165,14 +191,7 @@ def assemble(
         return result
 
     if sources:
-        registry = {
-            "characters": {key: list(char.emotions) for key, char in title.characters.items()},
-            "items": list(title.items),
-            "stats": list(title.config.stats),
-            "quests": list(title.quests),
-            "achievements": list(title.achievements),
-        }
-        compiled = compiler(sources, registry)
+        compiled = compiler(sources, scene_registry(sections))
         for key, diagnostics in compiled.get("diagnostics", {}).items():
             for diagnostic in diagnostics:
                 line = f":{diagnostic['line']}" if diagnostic.get("line") else ""

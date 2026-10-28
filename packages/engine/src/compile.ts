@@ -99,6 +99,27 @@ function lineOf(source: string, needle: string): number | null {
   return index === -1 ? null : index + 1;
 }
 
+/** Строки, где стоит именно этот тег: `# show: anna` не совпадёт с `# show: anna happy`. */
+function tagLines(source: string, tag: string): (number | null)[] {
+  const lines: number[] = [];
+  source.split("\n").forEach((line, index) => {
+    const tags = line
+      .replace(/\/\/.*$/, "")
+      .split("#")
+      .slice(1);
+    // Тег внутри [выбора] кончается на скобке: `* [Позвать #premium: 15]`.
+    if (tags.some((part) => part.replace(/\].*$/, "").trim() === tag)) lines.push(index + 1);
+  });
+  return lines.length ? lines : [lineOf(source, tag)];
+}
+
+/** Первая строка с репликой персонажа: `anna: …`, в том числе после `-` или `*`. */
+function speakerLine(source: string, speaker: string): number | null {
+  const pattern = new RegExp(`^\\s*(?:[-*+]\\s*)*${speaker}:\\s`);
+  const index = source.split("\n").findIndex((line) => pattern.test(line));
+  return index === -1 ? lineOf(source, `${speaker}:`) : index + 1;
+}
+
 /** "ERROR: line 13: ..." → номер строки исходника (без добавленного заголовка) и текст. */
 function parseCompilerMessage(raw: string): { line: number | null; message: string } {
   const match = /line (\d+): (.*)$/s.exec(raw);
@@ -220,19 +241,16 @@ export function compileScene(source: string, registry: Registry = {}): CompileRe
   }
 
   const effects = new Map<string, Effect>();
-  for (const text of collected.tags) {
-    const line = lineOf(source, text);
+  for (const text of new Set(collected.tags)) {
+    let problem: string | null;
     try {
       const tag = parseTag(text);
-      const problem =
+      problem =
         tag.kind === "command"
           ? checkCommand(tag.command, registry)
           : tag.kind === "effect"
             ? checkEffect(tag.effect, registry)
             : null;
-      if (problem !== null) {
-        diagnostics.push({ severity: "error", line, message: problem });
-      }
       if (tag.kind === "effect") {
         effects.set(JSON.stringify(tag.effect), tag.effect);
       }
@@ -240,7 +258,12 @@ export function compileScene(source: string, registry: Registry = {}): CompileRe
       if (!(error instanceof TagError)) {
         throw error;
       }
-      diagnostics.push({ severity: "error", line, message: `#${text}: ${error.message}` });
+      problem = `#${text}: ${error.message}`;
+    }
+    if (problem !== null) {
+      for (const line of tagLines(source, text)) {
+        diagnostics.push({ severity: "error", line, message: problem });
+      }
     }
   }
 
@@ -250,7 +273,7 @@ export function compileScene(source: string, registry: Registry = {}): CompileRe
       if (speaker !== PLAYER_SPEAKER && !(speaker in characters)) {
         diagnostics.push({
           severity: "error",
-          line: lineOf(source, `${speaker}:`),
+          line: speakerLine(source, speaker),
           message: `Говорит персонаж «${speaker}», которого нет в тайтле`,
         });
       }

@@ -90,6 +90,15 @@ describe("compileScene", () => {
     );
   });
 
+  it("points tag errors at every line with exactly that tag", () => {
+    const source =
+      "# show: anna neutral\nanna: Привет.\n# show: anna\nanna: Ну?\n# show: anna\n- anna: Пока.\n";
+
+    const lines = compileScene(source, REGISTRY).diagnostics.map((d) => d.line);
+
+    expect(lines).toEqual([3, 5]);
+  });
+
   it("reports malformed tags and dynamic tags", () => {
     const result = compileScene("VAR x = 3\n# effect: affection anna 3\n# bg: {x}\nТекст.\n");
 

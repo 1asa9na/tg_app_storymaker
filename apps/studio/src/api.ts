@@ -82,7 +82,12 @@ async function failure(response: Response): Promise<StudioError> {
   return new StudioError(response.status, detail);
 }
 
-async function request<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<T> {
+/** Запрос к API студии: путь без префикса /api/studio. */
+export async function request<T>(
+  method: "GET" | "POST" | "PUT" | "DELETE",
+  path: string,
+  body?: unknown,
+): Promise<T> {
   const response = await fetch(`/api/studio${path}`, {
     method,
     credentials: "same-origin",

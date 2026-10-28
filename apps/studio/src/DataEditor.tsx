@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { problems as describe, StudioError } from "./api";
+import { problems as describe, request } from "./api";
 import { clean, SchemaForm, type Refs, type Schema } from "./SchemaForm";
 
 // Данные тайтла по сущностям: разделы слева, форма справа. Ошибки полей сущности не дают
@@ -26,25 +26,6 @@ interface Documents {
   sections: Sections;
   scenes: string[];
   problems: { errors: string[]; warnings: string[] };
-}
-
-async function call<T>(method: string, url: string, body?: unknown): Promise<T> {
-  const response = await fetch(url, {
-    method,
-    credentials: "same-origin",
-    headers: method === "GET" ? {} : { "Content-Type": "application/json", "X-Studio": "1" },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  if (!response.ok) {
-    let detail: unknown = null;
-    try {
-      detail = ((await response.json()) as { detail?: unknown }).detail;
-    } catch {
-      // не JSON
-    }
-    throw new StudioError(response.status, detail);
-  }
-  return (await response.json()) as T;
 }
 
 const names = (section: Obj | null | undefined): Record<string, string> =>
@@ -79,7 +60,7 @@ function buildRefs(docs: Documents): Refs {
 }
 
 export function DataEditor({ slug, editor }: { slug: string; editor: boolean }) {
-  const base = `/api/studio/titles/${slug}/documents`;
+  const base = `/titles/${slug}/documents`;
   const [schemas, setSchemas] = useState<Record<string, Schema> | null>(null);
   const [docs, setDocs] = useState<Documents | null>(null);
   const [kind, setKind] = useState("config");
@@ -88,8 +69,8 @@ export function DataEditor({ slug, editor }: { slug: string; editor: boolean }) 
 
   useEffect(() => {
     Promise.all([
-      call<Record<string, Schema>>("GET", "/api/studio/schema"),
-      call<Documents>("GET", base),
+      request<Record<string, Schema>>("GET", "/schema"),
+      request<Documents>("GET", base),
     ]).then(
       ([s, d]) => {
         setSchemas(s);
@@ -293,7 +274,7 @@ function Entity({
     setSaved(false);
     const data = clean(draft, schema, { root: schema }) as Obj;
     try {
-      const result = await call<{ problems: Documents["problems"] }>("PUT", url, { data });
+      const result = await request<{ problems: Documents["problems"] }>("PUT", url, { data });
       onSaved(kind, entityKey, data, result.problems);
       setDraft(data);
       setDirty(false);
@@ -312,7 +293,7 @@ function Entity({
       return;
     }
     try {
-      const result = await call<{ problems: Documents["problems"] }>("DELETE", url);
+      const result = await request<{ problems: Documents["problems"] }>("DELETE", url);
       onSaved(kind, entityKey, null, result.problems);
       onDeleted();
     } catch (error) {

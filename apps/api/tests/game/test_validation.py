@@ -4,7 +4,7 @@ from typing import Any
 
 import yaml
 
-from storymaker_api.game.loader import load_title
+from storymaker_api.game.loader import load_title, scene_registry
 from storymaker_api.game.schema import Title
 from storymaker_api.game.validation import check_title
 from tests.game.conftest import TITLE
@@ -103,3 +103,27 @@ def test_loader_explains_schema_errors_per_file(tmp_path: Path) -> None:
             "items.yaml → rose → price: неизвестное поле",
         ]
     )
+
+
+def test_scene_registry_matches_validated_title() -> None:
+    """Студия строит реестр по сырым данным — он должен совпасть с тем, что видит схема."""
+    data = copy.deepcopy(TITLE)
+    data["characters"]["anna"]["emotions"] = "neutral"
+    title = Title.model_validate(data)
+
+    registry = scene_registry(data)
+
+    assert registry == {
+        "characters": {key: list(c.emotions) for key, c in title.characters.items()},
+        "items": list(title.items),
+        "stats": list(title.config.stats),
+        "quests": list(title.quests),
+        "achievements": list(title.achievements),
+    }
+    assert scene_registry({"characters": {"bob": {"emotions": 5}}, "config": "x"}) == {
+        "characters": {"bob": []},
+        "items": [],
+        "stats": [],
+        "quests": [],
+        "achievements": [],
+    }
