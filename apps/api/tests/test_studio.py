@@ -478,3 +478,82 @@ def test_simulator_runs_on_a_build(client: TestClient) -> None:
     assert "## Цель: Форма — максимизация" in goal.json()["report"]
     assert bad_goal.status_code == 422
     assert bad_goal.json()["detail"] == "нет метрики stat.luck"
+
+
+def test_schema_marks_references_for_forms(client: TestClient) -> None:
+    studio(client)
+
+    schemas = client.get("/api/studio/schema").json()
+
+    activity = schemas["activities"]["properties"]
+    assert activity["location"]["x-ref"] == "locations"
+    assert activity["location"]["title"] == "Локация"
+    assert activity["requires"]["x-yaml"] is True
+    assert set(schemas) == {
+        "config",
+        "characters",
+        "map",
+        "locations",
+        "activities",
+        "items",
+        "quests",
+        "events",
+        "achievements",
+    }
+
+
+def test_documents_edit_one_entity_at_a_time(client: TestClient) -> None:
+    studio(client)
+    key = slug()
+    events = "hello: {trigger: day_start, effects: {set: {flag.hi: true}}}\n"
+    files = {"title.yaml": CONFIG, "locations.yaml": LOCATIONS, "events.yaml": events}
+    post(client, f"/api/studio/titles/{key}/import", {"files": files})
+    base = f"/api/studio/titles/{key}/documents"
+
+    read = client.get(base).json()
+    bad = client.put(
+        f"{base}/activities/nap",
+        json={"data": {"name": "Сон", "location": "home", "cost": {"slots": "много"}}},
+        headers=HEADERS,
+    )
+    dangling = client.put(
+        f"{base}/activities/nap",
+        json={"data": {"name": "Сон", "location": "attic"}},
+        headers=HEADERS,
+    )
+    fixed = client.put(
+        f"{base}/activities/nap",
+        json={"data": {"name": "Сон", "location": "home"}},
+        headers=HEADERS,
+    )
+    wrong_key = client.put(f"{base}/config/other", json={"data": {"name": "x"}}, headers=HEADERS)
+
+    assert read["sections"]["events"]["hello"]["trigger"] == {"on": "day_start"}
+    assert read["sections"]["locations"]["home"]["name"] == "Дом"
+    assert read["problems"]["errors"] == []
+    assert bad.status_code == 422
+    assert bad.json()["detail"]["errors"] == ["cost → slots: ожидается целое число"]
+    assert any("attic" in e for e in dangling.json()["problems"]["errors"])
+    assert fixed.json()["problems"]["errors"] == []
+    assert wrong_key.status_code == 422
+    assert client.get(base).json()["sections"]["activities"]["nap"]["location"] == "home"
+
+    removed = client.delete(f"{base}/activities/nap", headers=HEADERS)
+    assert removed.status_code == 200
+    assert "nap" not in client.get(base).json()["sections"]["activities"]
+    assert client.delete(f"{base}/activities/nap", headers=HEADERS).status_code == 404
+
+
+def test_writer_cannot_edit_documents(client: TestClient) -> None:
+    studio(client)
+    key = slug()
+    post(client, f"/api/studio/titles/{key}/import", {"files": {"title.yaml": CONFIG}})
+    studio(client, "writer")
+
+    response = client.put(
+        f"/api/studio/titles/{key}/documents/locations/home",
+        json={"data": {"name": "Дом", "background": "home"}},
+        headers=HEADERS,
+    )
+
+    assert response.status_code == 403

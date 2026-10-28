@@ -1,6 +1,9 @@
 """Данные тайтла: схемы Pydantic и проверка ссылок между сущностями.
 
-Формат для геймдизайнера описан в docs/TITLE_FORMAT.md.
+Формат для геймдизайнера описан в docs/TITLE_FORMAT.md. Из этих же схем студия строит формы
+(JSON Schema): title — подпись поля, x-ref — на какой раздел ссылается значение (выпадающий
+список), x-key-ref — то же для ключей словаря, x-yaml — свободная структура, редактируется
+YAML-блоком (условия и эффекты).
 """
 
 from typing import Annotated, Any, Literal
@@ -31,8 +34,33 @@ class Model(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
 
+def F(
+    title: str,
+    default: Any = ...,
+    *,
+    ref: str | None = None,
+    key_ref: str | None = None,
+    yaml: bool = False,
+    hint: str | None = None,
+    **constraints: Any,
+) -> Any:
+    """Поле с подписью и подсказками для формы студии."""
+    extra: dict[str, Any] = {}
+    if ref:
+        extra["x-ref"] = ref
+    if key_ref:
+        extra["x-key-ref"] = key_ref
+    if yaml:
+        extra["x-yaml"] = True
+    return Field(
+        default, title=title, description=hint, json_schema_extra=extra or None, **constraints
+    )
+
+
 class Effects(Model):
     """Изменения состояния: начисления, флаги, квесты, достижения."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, json_schema_extra={"x-yaml": True})
 
     add: dict[str, int] = {}
     set: dict[str, bool] = {}
@@ -49,17 +77,19 @@ class Effects(Model):
 class Regen(Model):
     """Восстановление в реальном времени: +amount каждые every_minutes, до максимума."""
 
-    amount: int = Field(default=1, gt=0)
-    every_minutes: float = Field(gt=0)
+    amount: int = F("Сколько", 1, gt=0)
+    every_minutes: float = F("Раз в сколько минут", gt=0)
 
 
 class Resource(Model):
-    name: str
-    start: int = 0
-    max: int | None = None
-    regen: Regen | None = None
+    name: str = F("Название")
+    start: int = F("В начале", 0)
+    max: int | None = F("Максимум", None)
+    regen: Regen | None = F("Восстановление в реальном времени", None)
     #: Сколько восстанавливается при смене игрового дня: число или "max".
-    on_new_day: int | Literal["max"] | None = None
+    on_new_day: int | Literal["max"] | None = F(
+        "При смене дня", None, hint="Сколько прибавить утром: число или max"
+    )
 
     @model_validator(mode="after")
     def _check(self) -> "Resource":
@@ -69,106 +99,108 @@ class Resource(Model):
 
 
 class Stat(Model):
-    name: str
-    start: int = 0
-    min: int = 0
-    max: int = 100
+    name: str = F("Название")
+    start: int = F("В начале", 0)
+    min: int = F("Минимум", 0)
+    max: int = F("Максимум", 100)
 
 
 class Slot(Model):
-    id: Id
-    name: str
+    id: Id = F("Ключ")
+    name: str = F("Название")
 
 
 class Time(Model):
-    slots: list[Slot] = Field(min_length=1)
+    slots: list[Slot] = F("Части дня", min_length=1)
     #: Слоты, из которых можно лечь спать; по умолчанию — из любого.
-    sleep_from: IdList | None = None
+    sleep_from: IdList | None = F("Лечь спать можно", None, ref="slots", hint="Пусто — всегда")
     #: Длина тайтла в днях; после последнего дня игра заканчивается.
-    days: int | None = Field(default=None, gt=0)
+    days: int | None = F("Дней в тайтле", None, gt=0, hint="Пусто — без конца")
     #: Названия дней недели для расписаний (повторяются по кругу).
-    week: list[str] | None = None
+    week: list[str] | None = F("Дни недели", None, hint="Через запятую: пн, вт, ср…")
 
 
 class Start(Model):
-    location: Id | None = None
-    items: dict[Id, int] = {}
-    flags: IdList = []
+    location: Id | None = F("Где начинает и просыпается", None, ref="locations")
+    items: dict[Id, int] = F("Предметы в начале", {}, key_ref="items")
+    flags: IdList = F("Флаги в начале", [])
 
 
 class Gifts(Model):
-    per_character_per_day: int = Field(default=1, ge=0)
+    per_character_per_day: int = F("Подарков персонажу в день", 1, ge=0)
     #: Симпатия за подарок, если у персонажа нет особого отношения к предмету.
-    default_affection: int = 1
+    default_affection: int = F("Симпатия за обычный подарок", 1)
 
 
 class Affection(Model):
-    min: int = -100
-    max: int = 100
+    min: int = F("Минимум", -100)
+    max: int = F("Максимум", 100)
 
 
 class Config(Model):
-    name: str
-    time: Time
-    resources: dict[Id, Resource] = {}
-    stats: dict[Id, Stat] = {}
-    start: Start = Start()
-    gifts: Gifts = Gifts()
-    affection: Affection = Affection()
+    name: str = F("Название тайтла")
+    time: Time = F("Время")
+    resources: dict[Id, Resource] = F("Ресурсы", {})
+    stats: dict[Id, Stat] = F("Характеристики", {})
+    start: Start = F("Старт", Start())
+    gifts: Gifts = F("Подарки", Gifts())
+    affection: Affection = F("Границы симпатии", Affection())
 
 
 class AffectionLevel(Model):
-    at: int
-    name: str
+    at: int = F("С симпатии")
+    name: str = F("Название")
 
 
 class ScheduleEntry(Model):
-    location: Id
-    slots: IdList | None = None
-    weekdays: list[str] | None = None
-    when: Condition | None = None
+    location: Id = F("Где", ref="locations")
+    slots: IdList | None = F("Когда", None, ref="slots", hint="Пусто — в любое время")
+    weekdays: list[str] | None = F("Дни недели", None, ref="weekdays", hint="Пусто — каждый день")
+    when: Condition | None = F("Условие", None, yaml=True)
 
 
 class Character(Model):
-    name: str
-    color: str | None = None
-    emotions: IdList = Field(min_length=1)
-    romance: bool = False
-    affection_start: int = 0
-    levels: list[AffectionLevel] = []
+    name: str = F("Имя")
+    color: str | None = F("Цвет имени", None, hint="Например #f19bb8")
+    emotions: IdList = F("Эмоции", min_length=1, hint="Через запятую: neutral, happy, smirk")
+    romance: bool = F("Романтическая линия", False)
+    affection_start: int = F("Симпатия в начале", 0)
+    levels: list[AffectionLevel] = F("Уровни отношений", [])
     #: Предмет → изменение симпатии за такой подарок.
-    gifts: dict[Id, int] = {}
+    gifts: dict[Id, int] = F("Отношение к подаркам", {}, key_ref="items")
     #: Где персонаж бывает: первая подходящая запись выигрывает.
-    schedule: list[ScheduleEntry] = []
+    schedule: list[ScheduleEntry] = F(
+        "Расписание", [], hint="Сверху вниз: первая подходящая запись выигрывает"
+    )
 
 
 class Point(Model):
-    x: float = Field(ge=0, le=1)
-    y: float = Field(ge=0, le=1)
+    x: float = F("x (0–1)", ge=0, le=1)
+    y: float = F("y (0–1)", ge=0, le=1)
 
 
 class Map(Model):
     #: Ключ ассета с иллюстрацией карты; без неё карта — список карточек.
-    image: Id | None = None
-    points: dict[Id, Point] = {}
+    image: Id | None = F("Картинка карты", None, hint="Ключ ассета map_<ключ>; пусто — карточки")
+    points: dict[Id, Point] = F("Точки локаций", {}, key_ref="locations")
 
 
 class Location(Model):
-    name: str
-    background: Id
+    name: str = F("Название")
+    background: Id = F("Фон", hint="Ключ ассета bg_<ключ>")
     #: Слоты, когда локация открыта; по умолчанию — всегда.
-    slots: IdList | None = None
-    visible_when: Condition | None = None
-    unlock_when: Condition | None = None
-    locked_hint: str | None = None
+    slots: IdList | None = F("Открыта", None, ref="slots", hint="Пусто — всегда")
+    visible_when: Condition | None = F("Видна на карте, когда", None, yaml=True)
+    unlock_when: Condition | None = F("Открывается, когда", None, yaml=True)
+    locked_hint: str | None = F("Подсказка, пока закрыта", None)
 
 
 class Cost(Model):
     """Цена занятия: слоты времени и ресурсы, например {slots: 1, energy: 20}."""
 
-    model_config = ConfigDict(extra="allow", frozen=True)
+    model_config = ConfigDict(extra="allow", frozen=True, json_schema_extra={"x-cost": True})
 
-    slots: int = Field(default=1, ge=0)
+    slots: int = F("Частей дня", 1, ge=0)
 
     @property
     def resources(self) -> dict[str, int]:
@@ -183,43 +215,49 @@ class Cost(Model):
 
 
 class Activity(Model):
-    name: str
-    location: Id
-    description: str = ""
-    slots: IdList | None = None
-    cost: Cost = Cost()
-    requires: Condition | None = None
-    locked_hint: str | None = None
+    name: str = F("Название")
+    location: Id = F("Локация", ref="locations")
+    description: str = F("Описание", "")
+    slots: IdList | None = F(
+        "Когда доступно", None, ref="slots", hint="Пусто — когда открыта локация"
+    )
+    cost: Cost = F("Цена", Cost())
+    requires: Condition | None = F("Требует", None, yaml=True)
+    locked_hint: str | None = F("Подсказка, пока недоступно", None)
     #: Занятие с персонажем: доступно, только когда он в этой локации.
-    with_character: Id | None = None
-    effects: Effects = Effects()
+    with_character: Id | None = F("С персонажем", None, ref="characters")
+    effects: Effects = F("Что даёт", Effects())
 
 
 class Item(Model):
-    name: str
-    description: str = ""
-    icon: Id | None = None
-    kind: Literal["gift", "consumable", "key"] = "key"
+    name: str = F("Название")
+    description: str = F("Описание", "")
+    icon: Id | None = F("Иконка", None, hint="Ключ ассета, например item_rose")
+    kind: Literal["gift", "consumable", "key"] = F(
+        "Вид", "key", hint="gift — подарок, consumable — расходник, key — сюжетный"
+    )
     #: Эффекты использования расходника.
-    use: Effects = Effects()
+    use: Effects = F("Что даёт при использовании", Effects())
 
 
 class QuestStage(Model):
-    id: Id
-    journal: str
-    complete_when: Condition
-    effects: Effects = Effects()
+    id: Id = F("Ключ этапа")
+    journal: str = F("Текст в журнале")
+    complete_when: Condition = F("Выполнен, когда", yaml=True)
+    effects: Effects = F("Награда за этап", Effects())
 
 
 class Quest(Model):
-    name: str
+    name: str = F("Название")
     #: Квест стартует сам, когда условие выполнено. Без условия — только эффектом start_quest.
-    start_when: Condition | None = None
-    stages: list[QuestStage] = Field(min_length=1)
-    rewards: Effects = Effects()
+    start_when: Condition | None = F(
+        "Начинается, когда", None, yaml=True, hint="Пусто — только эффектом start_quest"
+    )
+    stages: list[QuestStage] = F("Этапы", min_length=1)
+    rewards: Effects = F("Награда за квест", Effects())
 
 
-def _trigger(value: Any) -> Any:
+def normalize_trigger(value: Any) -> Any:
     """Короткая запись: day_start | {activity: <занятие>} | {enter: <локация>}."""
     if value == "day_start":
         return {"on": "day_start"}
@@ -233,9 +271,11 @@ def _trigger(value: Any) -> Any:
 
 
 class Trigger(Model):
-    on: Literal["activity", "enter", "day_start"]
-    activity: Id | None = None
-    location: Id | None = None
+    on: Literal["activity", "enter", "day_start"] = F(
+        "Когда проверяется", hint="activity — после занятия, enter — при входе, day_start — утром"
+    )
+    activity: Id | None = F("Занятие", None, ref="activities")
+    location: Id | None = F("Локация", None, ref="locations")
 
     @model_validator(mode="after")
     def _check(self) -> "Trigger":
@@ -246,17 +286,17 @@ class Trigger(Model):
         return self
 
 
-TriggerField = Annotated[Trigger, BeforeValidator(_trigger)]
+TriggerField = Annotated[Trigger, BeforeValidator(normalize_trigger)]
 
 
 class Event(Model):
     #: day_start, {activity: <занятие>} или {enter: <локация>}.
-    trigger: TriggerField
-    when: Condition | None = None
-    scene: Id | None = None
-    effects: Effects = Effects()
-    priority: int = 0
-    once: bool = True
+    trigger: TriggerField = F("Триггер")
+    when: Condition | None = F("Условие", None, yaml=True)
+    scene: Id | None = F("Сцена", None, ref="scenes")
+    effects: Effects = F("Эффекты", Effects())
+    priority: int = F("Приоритет", 0, hint="Из подходящих срабатывает с наибольшим")
+    once: bool = F("Один раз", True)
 
     @model_validator(mode="after")
     def _check(self) -> "Event":
@@ -266,8 +306,8 @@ class Event(Model):
 
 
 class Achievement(Model):
-    name: str
-    description: str = ""
+    name: str = F("Название")
+    description: str = F("Описание", "")
 
 
 class Scene(Model):

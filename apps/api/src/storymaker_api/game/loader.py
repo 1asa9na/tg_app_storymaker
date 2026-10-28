@@ -80,7 +80,7 @@ def _where(location: tuple[int | str, ...]) -> str:
     return " → ".join([file, *(str(part) for part in path)])
 
 
-def _message(error: Any) -> str:
+def error_message(error: Any) -> str:
     text = MESSAGES.get(error["type"])
     if error["type"] == "value_error":
         text = str(error["msg"]).removeprefix("Value error, ")
@@ -161,7 +161,7 @@ def assemble(
         title = Title.model_validate(raw)
     except ValidationError as error:
         for problem in error.errors():
-            result.errors.append(f"{_where(problem['loc'])}: {_message(problem)}")
+            result.errors.append(f"{_where(problem['loc'])}: {error_message(problem)}")
         return result
 
     if sources:
