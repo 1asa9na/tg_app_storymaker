@@ -15,16 +15,20 @@ type Route =
   | { page: "titles" }
   | { page: "title"; slug: string }
   | { page: "sandbox"; slug: string; buildId: number }
+  | { page: "data"; slug: string }
   | { page: "login" };
 
 // Песочница тянет экран игры с рантаймом ink — грузится, только когда её открыли.
 const Sandbox = lazy(() => import("./Sandbox").then((m) => ({ default: m.Sandbox })));
+const DataEditor = lazy(() => import("./DataEditor").then((m) => ({ default: m.DataEditor })));
 
 function parseRoute(): Route {
   const path = window.location.pathname;
   if (path === "/login") return { page: "login" };
   const sandbox = /^\/t\/([a-z][a-z0-9_]*)\/b\/(\d+)$/.exec(path);
   if (sandbox) return { page: "sandbox", slug: sandbox[1]!, buildId: Number(sandbox[2]) };
+  const data = /^\/t\/([a-z][a-z0-9_]*)\/data$/.exec(path);
+  if (data) return { page: "data", slug: data[1]! };
   const match = /^\/t\/([a-z][a-z0-9_]*)$/.exec(path);
   return match ? { page: "title", slug: match[1]! } : { page: "titles" };
 }
@@ -80,6 +84,22 @@ export function App() {
     <Shell member={member} onLogout={() => api.logout().finally(() => setMember(null))}>
       {route.page === "titles" && <Titles member={member} />}
       {route.page === "title" && <Title slug={route.slug} member={member} />}
+      {route.page === "data" && (
+        <>
+          <p className="muted">
+            <a
+              href={`/t/${route.slug}`}
+              onClick={(e) => (e.preventDefault(), navigate(`/t/${route.slug}`))}
+            >
+              ← к тайтлу
+            </a>{" "}
+            · данные
+          </p>
+          <Suspense fallback={<p className="muted">Загружаем…</p>}>
+            <DataEditor slug={route.slug} editor={canEdit(member)} />
+          </Suspense>
+        </>
+      )}
       {route.page === "sandbox" && (
         <SandboxPage slug={route.slug} buildId={route.buildId} member={member} />
       )}
@@ -353,6 +373,13 @@ function Title({ slug, member }: { slug: string; member: Member }) {
             Импортировать папку
           </FolderInput>
         )}
+        <a
+          className="button"
+          href={`/t/${slug}/data`}
+          onClick={(e) => (e.preventDefault(), navigate(`/t/${slug}/data`))}
+        >
+          Данные
+        </a>
         <a className="button secondary" href={api.exportUrl(slug)}>
           Скачать архивом
         </a>

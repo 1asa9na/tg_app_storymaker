@@ -22,7 +22,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from storymaker_api import play
+from storymaker_api import documents, play
 from storymaker_api.assets import (
     LABELS,
     MAX_BYTES,
@@ -543,3 +543,61 @@ async def simulate_build(
         return await asyncio.to_thread(simulate, loaded, settings)
     except EngineUnavailableError as error:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(error)) from None
+
+
+# ── Данные тайтла в формах ──────────────────────────────────────────────
+
+
+@router.get("/schema")
+async def schema(member: MemberDep) -> dict[str, Any]:
+    """JSON Schema сущностей тайтла: студия строит по ним формы."""
+    del member
+    return documents.schemas()
+
+
+@router.get("/titles/{slug}/documents")
+async def title_documents(slug: str, session: SessionDep, member: MemberDep) -> dict[str, Any]:
+    """Все данные тайтла по сущностям, ключи сцен и проблемы (без компиляции сцен)."""
+    del member
+    row = await _title(session, slug)
+    return {
+        **await documents.read_documents(session, row),
+        "problems": await documents.problems(session, row),
+    }
+
+
+class DocumentRequest(BaseModel):
+    data: Any
+
+
+def _kind(kind: str) -> str:
+    if kind not in documents.MODELS:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "unknown section")
+    return kind
+
+
+@router.put("/titles/{slug}/documents/{kind}/{key}")
+async def put_document(
+    slug: str, kind: str, key: str, body: DocumentRequest, session: SessionDep, member: EditorDep
+) -> dict[str, Any]:
+    """Сохранить сущность. Ошибки её полей — 422; ошибки ссылок по тайтлу — в ответе."""
+    row = await _title(session, slug)
+    errors = documents.validate_entity(_kind(kind), key, body.data)
+    if errors:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, {"errors": errors})
+    await documents.save_document(session, row, kind, key, body.data, member.user.id)
+    await session.commit()
+    return {"problems": await documents.problems(session, row)}
+
+
+@router.delete("/titles/{slug}/documents/{kind}/{key}")
+async def remove_document(
+    slug: str, kind: str, key: str, session: SessionDep, member: EditorDep
+) -> dict[str, Any]:
+    """Удалить сущность. Ключи опубликованной сборки сохранит проверка при публикации."""
+    del member
+    row = await _title(session, slug)
+    if not await documents.delete_document(session, row, _kind(kind), key):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "document not found")
+    await session.commit()
+    return {"problems": await documents.problems(session, row)}
