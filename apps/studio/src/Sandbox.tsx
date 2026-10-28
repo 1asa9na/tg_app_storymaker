@@ -496,6 +496,9 @@ function Log({ base, reload }: { base: string; reload: number }) {
 function Simulator({ slug, buildId, game }: { slug: string; buildId: number; game: GameData }) {
   const [players, setPlayers] = useState(50);
   const [strategy, setStrategy] = useState("random");
+  const metrics = useMemo(() => goalMetrics(game), [game]);
+  const [metric, setMetric] = useState(() => metrics[0]?.path ?? "global.xp");
+  const [direction, setDirection] = useState<"max" | "min">("max");
   const [scenes, setScenes] = useState("free");
   const [gap, setGap] = useState(4);
   const [result, setResult] = useState<{ report: string; seconds: number } | null>(null);
@@ -509,7 +512,7 @@ function Simulator({ slug, buildId, game }: { slug: string; buildId: number; gam
       setResult(
         await call("POST", `/api/studio/titles/${slug}/builds/${buildId}/simulate`, {
           players,
-          strategy,
+          strategy: strategy === "goal" ? `goal:${metric}:${direction}` : strategy,
           scene_strategy: scenes,
           session_gap_hours: gap,
         }),
@@ -543,8 +546,33 @@ function Simulator({ slug, buildId, game }: { slug: string; buildId: number; gam
                 роман с {c.name}
               </option>
             ))}
+            <option value="goal">цель: метрика…</option>
           </select>
         </label>
+        {strategy === "goal" && (
+          <>
+            <label>
+              Метрика
+              <select value={metric} onChange={(e) => setMetric(e.target.value)}>
+                {metrics.map((m) => (
+                  <option key={m.path} value={m.path}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Направление
+              <select
+                value={direction}
+                onChange={(e) => setDirection(e.target.value as "max" | "min")}
+              >
+                <option value="max">максимизировать</option>
+                <option value="min">минимизировать</option>
+              </select>
+            </label>
+          </>
+        )}
         <label>
           Выборы в сценах
           <select value={scenes} onChange={(e) => setScenes(e.target.value)}>
@@ -575,6 +603,23 @@ function Simulator({ slug, buildId, game }: { slug: string; buildId: number; gam
       )}
     </Panel>
   );
+}
+
+/** Что может двигать стратегия-цель: характеристики, ресурсы, симпатия, предметы, опыт. */
+function goalMetrics(game: GameData): { path: string; label: string }[] {
+  return [
+    ...Object.entries(game.stats).map(([k, v]) => ({ path: `stat.${k}`, label: v.name })),
+    ...Object.entries(game.resources).map(([k, v]) => ({ path: `resource.${k}`, label: v.name })),
+    ...Object.entries(game.characters).map(([k, v]) => ({
+      path: `affection.${k}`,
+      label: `симпатия: ${v.name}`,
+    })),
+    ...Object.entries(game.items).map(([k, v]) => ({
+      path: `item.${k}`,
+      label: `предмет: ${v.name}`,
+    })),
+    { path: "global.xp", label: "опыт аккаунта" },
+  ];
 }
 
 /** Отчёт симулятора: заголовки, абзацы и таблицы — больше Markdown там нет. */

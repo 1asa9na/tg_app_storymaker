@@ -48,6 +48,7 @@ from storymaker_api.db import get_session
 from storymaker_api.game.scenes import EngineUnavailableError
 from storymaker_api.game.schema import Id
 from storymaker_api.game.simulator import Settings as SimulationSettings
+from storymaker_api.game.simulator import parse_goal
 from storymaker_api.models import (
     Asset,
     AssetVersion,
@@ -494,7 +495,7 @@ async def preview(
 
 class SimulateRequest(BaseModel):
     players: int = Field(default=50, ge=1, le=MAX_PLAYERS)
-    #: random или romance:<персонаж>
+    #: random, romance:<персонаж> или goal:<метрика>:max|min
     strategy: str = "random"
     scene_strategy: Literal["free", "random", "first"] = "free"
     session_gap_hours: float = Field(default=4, gt=0, le=72)
@@ -520,9 +521,15 @@ async def simulate_build(
         focus = body.strategy.removeprefix("romance:")
         if focus not in loaded.title.characters:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, f"нет персонажа {focus}")
+    elif body.strategy.startswith("goal:"):
+        try:
+            parse_goal(body.strategy, loaded.title)
+        except ValueError as error:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(error)) from None
     elif body.strategy != "random":
         raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_CONTENT, "стратегия: random или romance:<персонаж>"
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            "стратегия: random, romance:<персонаж> или goal:<метрика>:max|min",
         )
     settings = SimulationSettings(
         players=body.players,

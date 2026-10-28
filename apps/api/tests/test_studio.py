@@ -469,7 +469,12 @@ def test_simulator_runs_on_a_build(client: TestClient) -> None:
 
     report = post(client, url, {"players": 5, "strategy": "romance:anna"})
     unknown = post(client, url, {"players": 5, "strategy": "romance:nobody"})
+    goal = post(client, url, {"players": 5, "strategy": "goal:stat.fitness:max"})
+    bad_goal = post(client, url, {"players": 5, "strategy": "goal:stat.luck:max"})
 
     assert report.status_code == 200, report.json()
     assert report.json()["report"].startswith("# Симуляция «Неделя в новом городе»")
     assert unknown.status_code == 422
+    assert "## Цель: Форма — максимизация" in goal.json()["report"]
+    assert bad_goal.status_code == 422
+    assert bad_goal.json()["detail"] == "нет метрики stat.luck"
