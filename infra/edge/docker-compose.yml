@@ -7,6 +7,8 @@ services:
       - "80:80"
       - "443:443"
       - "443:443/udp"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./:/etc/caddy:ro
       - caddy-data:/data
