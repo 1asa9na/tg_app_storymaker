@@ -61,7 +61,7 @@ services:
     networks:
       default: {}
       edge:
-        # По этому имени edge-Caddy проксирует домен окружения
+        # По этому имени общий Caddy сервера проксирует домен окружения
         aliases:
           - storymaker-${APP_ENV}-web
 

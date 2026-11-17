@@ -114,9 +114,8 @@ jobs:
 
           target="$DEPLOY_USER@$DEPLOY_HOST"
           root=/opt/storymaker
-          ssh "$target" "mkdir -p $root/app $root/edge"
+          ssh "$target" "mkdir -p $root/app"
           scp infra/app/docker-compose.yml "$target:$root/app/"
-          scp infra/edge/docker-compose.yml infra/edge/Caddyfile "$target:$root/edge/"
           scp infra/scripts/deploy.sh "$target:$root/"
 
           # Файл окружения собирается из секретов и сразу пишется на сервер с правами 600

@@ -1,2 +1,0 @@
-# Сайты окружений пишет infra/scripts/deploy.sh в sites/<env>.caddy
-import sites/*.caddy
