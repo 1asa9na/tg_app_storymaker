@@ -30,81 +30,17 @@ sudo usermod -aG docker deploy
 sudo mkdir -p /opt/storymaker && sudo chown deploy: /opt/storymaker
 ```
 
-### Общий Caddy
+### Caddy
 
-На сервере один Caddy на все проекты. Он занимает порты 80 и 443, получает сертификаты и проксирует домены. Этот репозиторий его не запускает и не обновляет. Деплой StoryMaker только подключает окружение: пишет файл сайта и просит Caddy перечитать конфиг.
-
-Один раз, от пользователя с доступом к Docker:
-
-```bash
-docker network inspect edge >/dev/null 2>&1 || docker network create edge
-sudo mkdir -p /opt/caddy/sites
-sudo chown deploy: /opt/caddy /opt/caddy/sites
-```
-
-`/opt/caddy/docker-compose.yml`:
-
-```yaml
-services:
-  caddy:
-    image: caddy:2.10-alpine
-    container_name: caddy
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"
-    # Без этой строки DNS внутри Caddy рвал VPN на хосте.
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - ./sites:/etc/caddy/sites:ro
-      - caddy-data:/data
-      - caddy-config:/config
-    networks:
-      - edge
-
-volumes:
-  caddy-data: {}
-  caddy-config: {}
-
-networks:
-  edge:
-    external: true
-```
-
-`/opt/caddy/Caddyfile`:
-
-```
-import /etc/caddy/sites/*.caddy
-```
-
-Caddy не стартует, пока каталог `sites` пуст: директива `import` требует хотя бы один файл. Перед первым запуском положите сайт вручную — содержимое такое же, какое потом перезапишет `deploy.sh`:
+Caddy стоит на сервере отдельно и из этого репозитория не запускается. Деплой только открывает окружение на `127.0.0.1` и порте из секрета `WEB_PORT`. В конфиге своего Caddy на этот адрес смотрят домен приложения и, если есть, домен студии:
 
 ```
 staging.<домен>, devstudio.<домен> {
-	reverse_proxy storymaker-staging-web:80
+	reverse_proxy 127.0.0.1:8080
 }
 ```
 
-Файл: `/opt/caddy/sites/storymaker-staging.caddy`. Для прода — `storymaker-production.caddy` и домены прода. Контейнер `web` этого окружения уже должен быть в сети `edge`: при старте Caddy резолвит имя `storymaker-<окружение>-web`. После текущего деплоя так и есть. Затем:
-
-```bash
-docker compose -p caddy -f /opt/caddy/docker-compose.yml up -d
-```
-
-Если порты ещё держит прежний Caddy этого проекта, остановите его до запуска общего:
-
-```bash
-docker compose -p storymaker-edge -f /opt/storymaker/edge/docker-compose.yml down
-```
-
-Каталог `/opt/storymaker/edge` после этого больше не используется, его можно удалить.
-
-При каждой выкатке `deploy.sh` перезаписывает `/opt/caddy/sites/storymaker-<окружение>.caddy` и выполняет `caddy reload`. Контейнер `web` этого окружения уже в сети `edge` под именем `storymaker-<окружение>-web`. Другой проект подключается так же: свой файл в `/opt/caddy/sites` и та же сеть `edge`.
-
-Имена по умолчанию — каталог `/opt/caddy/sites`, контейнер `caddy`, конфиг внутри контейнера `/etc/caddy/Caddyfile`. Другие задаются в файле окружения ключами `CADDY_SITES`, `CADDY_CONTAINER`, `CADDY_CONFIG`. Workflow их не пишет: пока действуют умолчания, секреты не нужны.
+`8080` здесь — значение `WEB_PORT` стейджинга. У прода свой порт, например `8081`, и свои домены. Имя проекта и имя контейнера в этой строке не участвуют. На другом сервере меняется только порт, если `8080` там уже занят.
 
 ## 3. DNS
 
@@ -133,6 +69,7 @@ Workflow *Deploy* при каждой выкатке:
 | `DEPLOY_SSH_KEY` | да | Приватный SSH-ключ целиком, вместе со строками `BEGIN`/`END` | Файл `storymaker_deploy`, см. ниже |
 | `DEPLOY_KNOWN_HOSTS` | да | Отпечаток сервера | На своей машине: `ssh-keyscan -p <порт> -t ed25519 <ip-сервера>` (флаги до адреса); строку вывода целиком |
 | `APP_DOMAIN` | да | Домен окружения без `https://` | `staging.<домен>` или `app.<домен>` |
+| `WEB_PORT` | да | Порт на `127.0.0.1`, куда Caddy сервера проксирует домен. На одном сервере у окружений разные порты | `8080` для staging, `8081` для production |
 | `STUDIO_DOMAIN` | для студии | Домен студии без `https://`. Без него студия окружения не открывается | `devstudio.<домен>` для staging |
 | `POSTGRES_PASSWORD` | да | Пароль базы | `openssl rand -hex 24` |
 | `BOT_TOKEN` | да | Токен бота этого окружения | @BotFather (шаг 1) |
@@ -153,7 +90,7 @@ ssh-keygen -t ed25519 -N "" -f storymaker_deploy
 ```
 
 Правила:
-- **Значения у окружений разные:** два бота, два пароля, два проекта Supabase. Одинаковыми могут быть только `DEPLOY_*`, если окружения живут на одном сервере.
+- **Значения у окружений разные:** два бота, два пароля, два порта `WEB_PORT`, два проекта Supabase. Одинаковыми могут быть только `DEPLOY_*`, если окружения живут на одном сервере.
 - **Значения — одной строкой, без кавычек.** Исключение — `DEPLOY_SSH_KEY`: он многострочный, но в файл окружения не попадает.
 - **`POSTGRES_PASSWORD` задаётся один раз.** Postgres берёт его только при первом создании базы. Если потом поменять секрет, пароль в базе не изменится, а API перестанет к ней подключаться.
 - **Как ведёт себя деплой без секретов:** пока не задан `DEPLOY_HOST`, деплой пропускается с предупреждением. Если хост задан, а обязательного секрета нет, деплой падает и перечисляет недостающие.
@@ -185,7 +122,7 @@ ssh-keygen -t ed25519 -N "" -f storymaker_deploy
 
 Ветки: `master` — прод, `develop` — стейджинг, фичи — от `develop` и обратно в неё через PR.
 
-- **Стейджинг:** мердж фичи в `develop`. Workflow *Deploy* прогонит проверки, соберёт образы `ghcr.io/1asa9na/tg_app_storymaker/{api,web}:<sha>` и выкатит их скриптом `deploy.sh`: миграции, запуск, подключение домена к общему Caddy сервера.
+- **Стейджинг:** мердж фичи в `develop`. Workflow *Deploy* прогонит проверки, соберёт образы `ghcr.io/1asa9na/tg_app_storymaker/{api,web}:<sha>` и выкатит их скриптом `deploy.sh`: миграции и запуск. Домен в Caddy сервера уже указывает на `127.0.0.1:<WEB_PORT>`.
 - **Прод:** PR из `develop` в `master`. После мерджа тот же путь, но выкатка ждёт подтверждения в environment `production`.
 - **Повторная выкатка** без нового коммита: *Actions → Deploy → Run workflow*.
 

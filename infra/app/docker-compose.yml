@@ -58,17 +58,10 @@ services:
       interval: 10s
       timeout: 5s
       retries: 6
-    networks:
-      default: {}
-      edge:
-        # По этому имени общий Caddy сервера проксирует домен окружения
-        aliases:
-          - storymaker-${APP_ENV}-web
+    ports:
+      # Caddy сервера проксирует домен окружения сюда. Имя контейнера ему не нужно.
+      - "127.0.0.1:${WEB_PORT:?}:80"
 
 volumes:
   db-data: {}
   assets: {}
-
-networks:
-  edge:
-    external: true

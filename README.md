@@ -19,6 +19,6 @@ apps/player/     Telegram Mini App (Vite + React)
 infra/web/       образ web: внутренний Caddy + собранный плеер и студия
 infra/app/       docker compose одного окружения (db, api, web)
 infra/dev/       Postgres для локальной разработки
-infra/scripts/   deploy.sh — выкатка на сервере и подключение к общему Caddy
+infra/scripts/   deploy.sh — выкатка на сервере
 .github/         CI (проверки) и Deploy (образы → GHCR → сервер)
 ```
