@@ -16,9 +16,8 @@
 ```
 apps/api/        Python: API, бот, миграции (uv)
 apps/player/     Telegram Mini App (Vite + React)
-infra/web/       образ web: Caddy + собранный плеер
+infra/web/       образ web: внутренний Caddy + собранный плеер и студия
 infra/app/       docker compose одного окружения (db, api, web)
-infra/edge/      внешний Caddy: TLS и домены окружений
 infra/dev/       Postgres для локальной разработки
 infra/scripts/   deploy.sh — выкатка на сервере
 .github/         CI (проверки) и Deploy (образы → GHCR → сервер)

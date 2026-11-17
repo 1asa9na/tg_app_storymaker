@@ -30,6 +30,22 @@ sudo usermod -aG docker deploy
 sudo mkdir -p /opt/storymaker && sudo chown deploy: /opt/storymaker
 ```
 
+### Caddy
+
+Caddy стоит на сервере и из этого репозитория не запускается. Деплой его конфиг не меняет. Контейнер `web` в сети `edge` доступен как `storymaker-<окружение>-web`, для стейджинга это такой блок:
+
+```
+staging.bgylke8.online, devstudio.bgylke8.online {
+	reverse_proxy storymaker-staging-web:80
+}
+```
+
+Для прода то же самое с доменами прода и именем `storymaker-production-web`. Сеть `edge` деплой создаёт сам, если её ещё нет. Контейнер Caddy один раз подключи к ней, иначе имя `storymaker-staging-web` из его конфига не резолвится:
+
+```bash
+docker network connect edge <контейнер caddy>
+```
+
 ## 3. DNS
 
 A-записи на IP сервера:
@@ -37,7 +53,7 @@ A-записи на IP сервера:
 - `app.<домен>`
 - студия стейджинга — `devstudio.<домен>`; студия прода — по желанию, например `studio.<домен>`
 
-Сертификаты Let's Encrypt Caddy получит сам при первом деплое. Записи должны начать резолвиться до этого.
+Сертификаты Let's Encrypt получит общий Caddy сервера. Записи должны начать резолвиться до первого запроса к домену.
 
 ## 4. Секреты в GitHub
 
@@ -109,7 +125,7 @@ ssh-keygen -t ed25519 -N "" -f storymaker_deploy
 
 Ветки: `master` — прод, `develop` — стейджинг, фичи — от `develop` и обратно в неё через PR.
 
-- **Стейджинг:** мердж фичи в `develop`. Workflow *Deploy* прогонит проверки, соберёт образы `ghcr.io/1asa9na/tg_app_storymaker/{api,web}:<sha>` и выкатит их скриптом `deploy.sh`: миграции, запуск, регистрация домена во внешнем Caddy.
+- **Стейджинг:** мердж фичи в `develop`. Workflow *Deploy* прогонит проверки, соберёт образы `ghcr.io/1asa9na/tg_app_storymaker/{api,web}:<sha>` и выкатит их скриптом `deploy.sh`: миграции и запуск. Домен в Caddy сервера уже указывает на `storymaker-staging-web`.
 - **Прод:** PR из `develop` в `master`. После мерджа тот же путь, но выкатка ждёт подтверждения в environment `production`.
 - **Повторная выкатка** без нового коммита: *Actions → Deploy → Run workflow*.
 
