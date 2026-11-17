@@ -2,7 +2,8 @@
 # Выкатывает окружение на сервере: ./deploy.sh <staging|production> <image-tag>
 # Рядом должны лежать app/docker-compose.yml и <env>.env.
 # Все файлы, включая <env>.env (из секретов environment), кладёт сюда workflow Deploy.
-# Caddy этот скрипт не запускает и не настраивает: web слушает 127.0.0.1:$WEB_PORT.
+# Caddy этот скрипт не запускает и его конфиг не меняет.
+# Web в сети edge доступен как storymaker-<окружение>-web.
 set -euo pipefail
 
 usage="usage: deploy.sh <staging|production> <image-tag>"
@@ -25,11 +26,11 @@ env_value() { sed -n "s/^$1=//p" "$ENV_FILE"; }
 APP_DOMAIN=$(env_value APP_DOMAIN)
 [[ -n $APP_DOMAIN ]] || fail "в $ENV_FILE не задан APP_DOMAIN"
 STUDIO_DOMAIN=$(env_value STUDIO_DOMAIN)
-WEB_PORT=$(env_value WEB_PORT)
-[[ $WEB_PORT =~ ^[0-9]+$ ]] || fail "в $ENV_FILE не задан WEB_PORT — порт на 127.0.0.1, куда смотрит Caddy сервера"
 
 export ENV_FILE IMAGE_TAG
 app() { docker compose -p "storymaker-$ENV_NAME" -f "$ROOT/app/docker-compose.yml" --env-file "$ENV_FILE" "$@"; }
+
+docker network inspect edge >/dev/null 2>&1 || docker network create edge >/dev/null
 
 app pull
 app up -d --wait db
@@ -39,4 +40,4 @@ app run --rm api python -m storymaker_api.studio seed
 app up -d --wait --remove-orphans
 
 docker image prune -f >/dev/null
-echo "✓ $ENV_NAME → $IMAGE_TAG (https://$APP_DOMAIN${STUDIO_DOMAIN:+, студия https://$STUDIO_DOMAIN}, 127.0.0.1:$WEB_PORT)"
+echo "✓ $ENV_NAME → $IMAGE_TAG (https://$APP_DOMAIN${STUDIO_DOMAIN:+, студия https://$STUDIO_DOMAIN})"
